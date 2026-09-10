@@ -18,6 +18,7 @@ import {
   SheetContent,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { BlurCurve } from '@/projects/001-duo-expansion/BlurCurve';
 import { DuoRenderer } from '@/projects/001-duo-expansion/renderer';
 import {
   defaults,
@@ -669,6 +670,12 @@ export default function Home() {
                 format={pixels}
                 onChange={(n) =>
                   applySettings({ ...settingsRef.current, blurRadius: n })
+                }
+              />
+              <BlurCurve
+                settings={settings}
+                onChange={(patch) =>
+                  applySettings({ ...settingsRef.current, ...patch })
                 }
               />
               <Range

@@ -110,10 +110,15 @@ export class DuoRenderer {
       2,
       Math.sqrt(1800000 / (this.width * this.height)),
     );
-    this.canvas.width = Math.round(this.width * ratio);
-    this.canvas.height = Math.round(this.height * ratio);
-    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    this.requestDraw();
+    const pixelWidth = Math.round(this.width * ratio);
+    const pixelHeight = Math.round(this.height * ratio);
+    if (this.canvas.width !== pixelWidth) this.canvas.width = pixelWidth;
+    if (this.canvas.height !== pixelHeight) this.canvas.height = pixelHeight;
+    this.gl.viewport(0, 0, pixelWidth, pixelHeight);
+    // ResizeObserver runs before paint, after RAF. Redraw in this same callback:
+    // scheduling another RAF would expose the cleared opaque buffer as black.
+    cancelAnimationFrame(this.frame);
+    this.draw(performance.now());
   }
 
   setProgress(value: number) {
@@ -181,7 +186,12 @@ export class DuoRenderer {
     uniform('frontCorner', [0.97, 1, 0.006, 0]);
     // The blur boundary shift is fixed and cannot be changed by saved versions.
     uniform('frontBlur', [s.diagonalBlurRadius, 1, 0.24, 0]);
-    uniform('creaseBlur', [s.creaseBlendWidth, s.creaseBlurEasing, 0, 0]);
+    uniform('creaseBlur', [
+      s.creaseBlendWidth,
+      s.creaseBlurEasing,
+      s.blurCurveStart,
+      s.blurCurveEnd,
+    ]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (this.animation) this.requestDraw();
   };

@@ -55,3 +55,7 @@ An optional, feature-detected WebMCP `configure_duo` tool exposes expansion and 
 ## Sample image
 
 The included Mars dune photograph is NASA/JPL-Caltech/University of Arizona, [PIA15283](https://science.nasa.gov/photojournal/dunes-in-noachis-terra-region-of-mars/), carried over from SwiftLab. The project contains no personal camera-roll photos.
+
+The Blur curve editor has two vertical handles: drag with a mouse or touch, or focus a handle and use Up/Down (Shift for larger steps). Reset restores the progressive default; saved versions include the curve. These controls are available to every visitor who can access the site and affect only their own session.
+
+Canvas resizing draws synchronously after updating its backing buffer. This prevents the cleared opaque buffer from appearing black during inspector transitions; unchanged pixel dimensions are not reassigned.

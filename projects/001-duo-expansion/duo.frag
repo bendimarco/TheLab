@@ -13,7 +13,7 @@ struct DuoUniforms {
     vec4 frontEdge;       // blur exponent, dark amount, dark start, dark exponent
     vec4 frontCorner;     // dark amount, geometric reach, softness, onset (radians)
     vec4 frontBlur;       // diagonal blur radius (points), inside enabled, blur end shift, reserved
-    vec4 creaseBlur; // projected blend width / panel width, easing exponent, reserved, reserved
+    vec4 creaseBlur; // projected blend width / panel width, easing exponent, cubic handle 1 height, cubic handle 2 height
 };
 // A rectangle with rounding only at its free edge. The hinge edge stays straight.
 float panelDistance(vec2 p, vec2 size, float radius) {
@@ -104,7 +104,12 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     // the panel. Shift both masks so neither can pin a sharp strip to the edge.
     float tilt = sin(angle);
     float endShift = saturate(u.frontBlur.z) * tilt * tilt * tilt * tilt;
-    float blurX = saturate(x + endShift);
+    // Shape the spatial ramp before moving its clear boundary. Compressing the
+    // ramp preserves a gradient all the way to the free edge (no clamped plateau).
+    float inverseX = 1.0 - x;
+    float curvedX = 3.0 * inverseX * inverseX * x * saturate(u.creaseBlur.z)
+                  + 3.0 * inverseX * x * x * saturate(u.creaseBlur.w) + x * x * x;
+    float blurX = mix(curvedX, 1.0, endShift);
     float panelWidth = inside ? w - bezel : viewport.x;
     float creaseWeight = creaseBlurWeight(abs(flatX - anchorX) + endShift * panelWidth,
         panelWidth, u.creaseBlur.x, u.creaseBlur.y);
@@ -115,12 +120,16 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     // At reach=1 the inner edge of either wedge projects to a horizontal line.
     float geometricDepth = max(0.0, 0.5 * (z - referenceZ) / (camera - referenceZ));
     float depth = geometricDepth * max(0.0, u.frontCorner.y);
+    // The wedge exists before the broad angular treatment has built up. Cover
+    // stretched boundary texels as soon as it is about one logical pixel deep.
+    float wedgeVisibility = smoothstep(0.0, 1.5, depth * viewport.y);
+    float diagonalTurn = max(turn, 0.3 * wedgeVisibility);
     float hingeProtection = smoothstep(0.0, 0.025, x);
     // A second blur grows toward the two wedges, as well as toward the free edge
     // and with rotation. Its band extends inward from the geometric wedge boundary.
     float blurHingeProtection = smoothstep(0.0, 0.025, blurX);
     float diagonalRadius = u.frontCorner.y > 0.0
-        ? max(0.0, u.frontBlur.x) * turn * blurX * blurHingeProtection * creaseWeight : 0.0;
+        ? max(0.0, u.frontBlur.x) * diagonalTurn * blurX * blurHingeProtection * creaseWeight : 0.0;
     float distanceInsideImage = max(0.0, min(localUV.y, 1.0 - localUV.y) - depth) * viewport.y;
     float diagonalMask = 1.0 - smoothstep(0.0, max(1.0, diagonalRadius * 3.0), distanceInsideImage);
     float diagonalBlur = diagonalRadius * diagonalMask;
@@ -134,7 +143,7 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     float top = 1.0 - smoothstep(depth - softness, depth + softness, localUV.y);
     float bottom = 1.0 - smoothstep(depth - softness, depth + softness, 1.0 - localUV.y);
     float corner = u.frontCorner.y > 0.0
-        ? saturate(u.frontCorner.x) * saturate(turn * 4.0) * max(top, bottom) * hingeProtection : 0.0;
+        ? saturate(u.frontCorner.x) * max(saturate(turn * 4.0), wedgeVisibility) * max(top, bottom) * hingeProtection : 0.0;
     return color * (1.0 - dark) * (1.0 - corner);
 }
 

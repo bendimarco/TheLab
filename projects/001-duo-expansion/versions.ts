@@ -32,7 +32,11 @@ export function parseArchive(raw: string | null): Archive {
   for (const v of value.versions) {
     // Preserve existing versions while retiring the removed reflection control.
     if (v?.settings && typeof v.settings === 'object') {
-      const settings = { ...v.settings };
+      const settings = {
+        blurCurveStart: 1 / 3,
+        blurCurveEnd: 2 / 3,
+        ...v.settings,
+      };
       delete settings.glassReflection;
       delete settings.blurEndShift;
       v.settings = settings;

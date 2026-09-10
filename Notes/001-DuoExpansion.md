@@ -64,7 +64,7 @@ The turning face's darkening follows the same local progression as the blur, wit
 
 The original sharp hinge can dominate the image as foreshortening compresses the whole visible face. `blurEndShift` moves the clear end of the gradient past that hinge by `amount × sin⁴(angle)`, in panel-width units. The quartic angular envelope starts gently, becomes strongest near edge-on, and returns to zero at both flat endpoints.
 
-Both factors that previously protected the hinge must move. The projected crease distance gains `shift × panelWidth`; the local blur ramp uses `clamp(x + shift)` instead of `x`. The diagonal blur uses the shifted coordinate as well. Merely increasing radius, or moving only one of the two masks, would leave an unblurred strip.
+Both factors that previously protected the hinge must move. The projected crease distance gains `shift × panelWidth`; the local blur ramp uses `mix(curve(x), 1, shift)` instead of clamping an additive shift. The diagonal blur uses the shifted coordinate as well. Merely increasing radius, or moving only one of the two masks, would leave an unblurred strip.
 
 The shift amount is fixed at 0.24. Saved versions cannot override it. Maximum blur remains bounded by the existing blur radii, and no additional texture samples are needed. The dark-gradient and wedge-opacity coordinates are unchanged. WebGL and Metal use the same formula and uniform slot.
 
@@ -91,3 +91,19 @@ A useful next comparison is to feed both implementations the same horizontal gri
 ## Reading path
 
 Start with `settings.ts` for the current editable values, then `renderer.ts` for resource lifetime and uniform mapping. In `duo.frag`, read `shadeDuo` and `panelColor` first. Follow with `foldColor`, `creaseBlurWeight`, and `sampleFront`. Read the slab-intersection and bevel functions last; they provide the geometry underlying those visual treatments.
+
+
+### Editable spatial blur curve
+
+The spatial falloff now uses a cubic Bézier with fixed endpoints (0, 0) and (1, 1). Its two control points have horizontal positions 1/3 and 2/3; their heights are editable. This makes the horizontal coordinate equal the polynomial parameter, so evaluation costs a few multiplications with no inverse-curve iteration and no extra texture reads. The tradeoff is vertical-only handle movement rather than an unrestricted timing-curve editor.
+
+The default heights, 0 and 0.4, keep the middle of the turning image clearer while preserving full blur at the free edge. Both front and inside use this same spatial profile. The curve is applied before the fixed 24% angular boundary shift: `mix(curve(x), 1, shift)`. This retains a little blur at the hinge during strong folds without saturating an entire outer strip at maximum blur. Main and diagonal blur share the coordinate; darkness remains independent. The existing projected crease blend still gates the result.
+
+Older saved versions acquire neutral curve heights of 1/3 and 2/3. New versions store both heights. The fixed boundary shift and revised non-clamping ramp apply to every version, so historical renders can differ from the previous additive-clamp algorithm.
+
+
+### Covering the first visible wedge
+
+Perspective compensation reveals a thin triangular area beyond the flat picture near the start of a fold. Clamped texture sampling repeats the image boundary there, which looks like vertical streaks if shading waits for the slow angular envelope. Wedge visibility now follows its geometric depth in logical pixels, using smoothstep from 0 to 1.5 pixels. It drives early wedge shadow opacity and a small diagonal-blur floor (30% of the configured radius, still spatially masked). This confines the correction to the top and bottom boundaries, preserves the main image falloff, and vanishes continuously at the flat endpoints.
+
+Validation: the native Metal regression suite passes with the new curve and early wedge treatment, including both flat endpoints, hinge continuity, horizontal image lock, and stationary-screen isolation. The web production build and seven automated checks pass, covering curve monotonicity, version migration, and synchronous resize drawing. These checks do not establish real-device frame rates or cross-browser visual equivalence.
