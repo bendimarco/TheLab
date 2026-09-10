@@ -1,8 +1,8 @@
 export const defaults = {
-  blurRadius: 36,
-  diagonalBlurRadius: 16,
-  creaseBlendWidth: 0.45,
-  creaseBlurEasing: 1.5,
+  blurRadius: 56,
+  diagonalBlurRadius: 41,
+  creaseBlendWidth: 0.26,
+  creaseBlurEasing: 3.3,
   edgeDarkness: 0.58,
   blurCurveStart: 0,
   blurCurveEnd: 0.4,

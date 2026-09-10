@@ -280,6 +280,28 @@ export default function Home() {
     };
     try {
       void Promise.resolve(
+        context.registerTool(
+          {
+            name: 'read_duo_versions',
+            description:
+              'Read this browser’s locally saved Duo shader versions and current settings. Does not modify or upload images.',
+            inputSchema: {
+              type: 'object',
+              properties: {},
+              additionalProperties: false,
+            },
+            annotations: { readOnlyHint: true, untrustedContentHint: false },
+            execute() {
+              return {
+                archive: parseArchive(localStorage.getItem(STORAGE_KEY)),
+                settings: settingsRef.current,
+              };
+            },
+          },
+          { signal: lifecycle.signal },
+        ),
+      ).catch(() => {});
+      void Promise.resolve(
         context.registerTool(tool, { signal: lifecycle.signal }),
       ).catch(() => {});
     } catch {

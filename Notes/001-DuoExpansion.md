@@ -109,3 +109,7 @@ Perspective compensation reveals a thin triangular area beyond the flat picture 
 Validation: the native Metal regression suite passes with the new curve and early wedge treatment, including both flat endpoints, hinge continuity, horizontal image lock, and stationary-screen isolation. The web production build and seven automated checks pass, covering curve monotonicity, version migration, and synchronous resize drawing. These checks do not establish real-device frame rates or cross-browser visual equivalence.
 
 The diagonal shadow has a separate endpoint attenuation: `mix(0.45, 1, smoothstep(0, 0.24, treatmentAngle))`. Over the first/last roughly 14 degrees it approaches full strength gradually, reducing the dark cutoff near flat. Geometric wedge visibility still clears it completely at the endpoint. Diagonal blur remains unchanged so stretched boundary texels stay softened even while their shadow is lighter.
+
+### Published starting values
+
+The web starting preset now matches the saved Version 1: main blur 56, diagonal blur 41, projected crease width 0.26, crease easing 3.3, darkness 0.58, and curve heights 0 / 0.4. The larger radii soften the free edge and wedges more strongly, while the narrower crease blend and higher exponent preserve a sharper region near the hinge. These are source defaults, so new visitors do not need a local saved version to reproduce this tuning.

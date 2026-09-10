@@ -59,3 +59,9 @@ The included Mars dune photograph is NASA/JPL-Caltech/University of Arizona, [PI
 The Blur curve editor has two vertical handles: drag with a mouse or touch, or focus a handle and use Up/Down (Shift for larger steps). Reset restores the progressive default; saved versions include the curve. These controls are available to every visitor who can access the site and affect only their own session.
 
 Canvas resizing draws synchronously after updating its backing buffer. This prevents the cleared opaque buffer from appearing black during inspector transitions; unchanged pixel dimensions are not reassigned.
+
+## Repository
+
+GitHub: https://github.com/bendimarco/TheLab
+
+This remains a standalone app. Clone the repository, run `npm ci`, then `npm run dev` with Node 22.13 or newer. The initial shader preset matches the selected Version 1; visitor-created versions remain local to each browser. The Sites hosting manifest is retained for that deployment option.

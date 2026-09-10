@@ -11,7 +11,11 @@ for (const file of ['settings', 'versions', 'renderer']) {
     new URL(`../projects/001-duo-expansion/${file}.ts`, import.meta.url),
     'utf8',
   );
-  if (file === 'renderer') source = source.replace("import fragment from './duo.frag?raw';", "const fragment = '';" );
+  if (file === 'renderer')
+    source = source.replace(
+      "import fragment from './duo.frag?raw';",
+      "const fragment = '';",
+    );
   const output = ts
     .transpileModule(source, {
       compilerOptions: {
@@ -39,7 +43,7 @@ test('saved settings round-trip independently; deleting does not reuse version n
     '2026-09-10T12:00:00Z',
   );
   effect.blurRadius = 0;
-  assert.equal(first.versions[0].settings.blurRadius, 36);
+  assert.equal(first.versions[0].settings.blurRadius, defaults.blurRadius);
   const decoded = parseArchive(JSON.stringify(first));
   assert.deepEqual(decoded, first);
   decoded.versions = [];
@@ -83,7 +87,12 @@ test('fold easing has exact endpoints and remains monotonic', () => {
 });
 
 test('retired reflection and blur-shift values cannot override the fixed treatment', () => {
-  const old = addVersion(emptyArchive(), defaults, 'old', '2026-09-10T12:00:00Z');
+  const old = addVersion(
+    emptyArchive(),
+    defaults,
+    'old',
+    '2026-09-10T12:00:00Z',
+  );
   old.versions[0].settings.blurEndShift = 0.95;
   old.versions[0].settings.glassReflection = 0.9;
   const migrated = parseArchive(JSON.stringify(old));
@@ -93,49 +102,90 @@ test('retired reflection and blur-shift values cannot override the fixed treatme
 });
 
 test('blur curves keep endpoints and never reverse, including extreme handles', () => {
-  for (const a of [0, 1 / 3, 0.5, 1]) for (const b of [0, 0.4, 2 / 3, 1]) {
-    assert.equal(blurCurve(0, a, b), 0);
-    assert.equal(blurCurve(1, a, b), 1);
-    let previous = 0;
-    for (let i = 0; i <= 1000; i++) {
-      const value = blurCurve(i / 1000, a, b);
-      assert.ok(value >= previous - 1e-12 && value <= 1);
-      previous = value;
+  for (const a of [0, 1 / 3, 0.5, 1])
+    for (const b of [0, 0.4, 2 / 3, 1]) {
+      assert.equal(blurCurve(0, a, b), 0);
+      assert.equal(blurCurve(1, a, b), 1);
+      let previous = 0;
+      for (let i = 0; i <= 1000; i++) {
+        const value = blurCurve(i / 1000, a, b);
+        assert.ok(value >= previous - 1e-12 && value <= 1);
+        previous = value;
+      }
     }
-  }
-  assert.ok(blurCurve(0.5, defaults.blurCurveStart, defaults.blurCurveEnd) < 0.35);
+  assert.ok(
+    blurCurve(0.5, defaults.blurCurveStart, defaults.blurCurveEnd) < 0.35,
+  );
 });
 test('older versions migrate to neutral handles, custom handles round trip', () => {
-  const old = addVersion(emptyArchive(), defaults, 'old', '2026-09-10T12:00:00Z');
+  const old = addVersion(
+    emptyArchive(),
+    defaults,
+    'old',
+    '2026-09-10T12:00:00Z',
+  );
   delete old.versions[0].settings.blurCurveStart;
   delete old.versions[0].settings.blurCurveEnd;
   const migrated = parseArchive(JSON.stringify(old)).versions[0].settings;
   assert.equal(migrated.blurCurveStart, 1 / 3);
   assert.equal(migrated.blurCurveEnd, 2 / 3);
-  const custom = addVersion(emptyArchive(), { ...defaults, blurCurveStart: 0.8, blurCurveEnd: 0.1 }, 'new', '2026-09-10T12:00:00Z');
+  const custom = addVersion(
+    emptyArchive(),
+    { ...defaults, blurCurveStart: 0.8, blurCurveEnd: 0.1 },
+    'new',
+    '2026-09-10T12:00:00Z',
+  );
   assert.deepEqual(parseArchive(JSON.stringify(custom)), custom);
 });
 
 test('canvas resize redraws before returning, skips unchanged buffer sizes and retains pose', () => {
-  const original = Object.fromEntries(['window', 'document', 'requestAnimationFrame', 'cancelAnimationFrame'].map(k => [k, globalThis[k]]));
+  const original = Object.fromEntries(
+    ['window', 'document', 'requestAnimationFrame', 'cancelAnimationFrame'].map(
+      (k) => [k, globalThis[k]],
+    ),
+  );
   const events = [];
   let next = 0;
   const pending = new Map();
   globalThis.window = { devicePixelRatio: 1 };
   globalThis.document = { hidden: false };
-  globalThis.requestAnimationFrame = fn => { pending.set(++next, fn); return next; };
-  globalThis.cancelAnimationFrame = id => pending.delete(id);
-  const gl = new Proxy({}, { get: (_, key) => {
-    if (key === 'drawArrays') return () => events.push('draw');
-    if (key === 'getShaderParameter' || key === 'getProgramParameter') return () => true;
-    if (key.startsWith('create') || key === 'getUniformLocation') return () => ({});
-    if (key.toUpperCase() === key) return 0;
-    return () => {};
-  }});
-  let width = 1, height = 1;
-  const canvas = { getContext: () => gl,
-    get width() { return width; }, set width(n) { width = n; events.push('clear'); },
-    get height() { return height; }, set height(n) { height = n; events.push('clear'); },
+  globalThis.requestAnimationFrame = (fn) => {
+    pending.set(++next, fn);
+    return next;
+  };
+  globalThis.cancelAnimationFrame = (id) => pending.delete(id);
+  const gl = new Proxy(
+    {},
+    {
+      get: (_, key) => {
+        if (key === 'drawArrays') return () => events.push('draw');
+        if (key === 'getShaderParameter' || key === 'getProgramParameter')
+          return () => true;
+        if (key.startsWith('create') || key === 'getUniformLocation')
+          return () => ({});
+        if (key.toUpperCase() === key) return 0;
+        return () => {};
+      },
+    },
+  );
+  let width = 1,
+    height = 1;
+  const canvas = {
+    getContext: () => gl,
+    get width() {
+      return width;
+    },
+    set width(n) {
+      width = n;
+      events.push('clear');
+    },
+    get height() {
+      return height;
+    },
+    set height(n) {
+      height = n;
+      events.push('clear');
+    },
   };
   try {
     const renderer = new DuoRenderer(canvas);
@@ -154,7 +204,20 @@ test('canvas resize redraws before returning, skips unchanged buffer sizes and r
     renderer.dispose();
   } finally {
     for (const [key, value] of Object.entries(original)) {
-      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+      if (value === undefined) delete globalThis[key];
+      else globalThis[key] = value;
     }
   }
+});
+
+test('new sessions start with the chosen Version 1 tuning', () => {
+  assert.deepEqual(defaults, {
+    blurRadius: 56,
+    diagonalBlurRadius: 41,
+    creaseBlendWidth: 0.26,
+    creaseBlurEasing: 3.3,
+    edgeDarkness: 0.58,
+    blurCurveStart: 0,
+    blurCurveEnd: 0.4,
+  });
 });
