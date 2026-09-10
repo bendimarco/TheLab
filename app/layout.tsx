@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 export const metadata: Metadata = {
-  title: 'WebLab — Duo',
+  title: 'Lab',
   description:
     'An interactive folding glass shader. Explore the Duo fold with your own images.',
 };

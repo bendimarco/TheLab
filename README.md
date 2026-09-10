@@ -1,4 +1,4 @@
-# WebLab
+# Lab
 
 A browser home for interactive graphics projects, starting with **Duo**: a direct WebGL 2 port of the SwiftLab folding-screen shader.
 
