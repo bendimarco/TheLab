@@ -16,7 +16,7 @@ The web shader preserves the Swift defaults: 36-point progressive blur, 16-point
 
 A mesh renderer with Three.js would be a reasonable alternative for a larger 3D scene. Here, the Metal implementation already solved visibility, bevels, image projection, and sampling analytically. Retaining that math avoids introducing a second geometry representation and makes the two implementations easier to compare. The tradeoff is that procedural geometry consumes fragment work, especially around the rounded rim.
 
-The nine Metal `float4` uniform groups become GLSL `vec4` members on a uniform struct. Video-orientation matrices are identity in this image-only port: the browser decodes orientation before the texture is created. Changes to the six exposed shader values alter uniforms without recompiling the program.
+The nine Metal `float4` uniform groups become GLSL `vec4` members on a uniform struct. GLSL ES requires explicit floating-point operands: expressions such as `2 * bezel` must become `2.0 * bezel`. The desktop GLSL compiler accepted the original numeric conversions, but the actual WebGL compiler rejected them. Checking the browser compiler therefore caught a portability issue that the native compile check could not. Video-orientation matrices are identity in this image-only port: the browser decodes orientation before the texture is created. Changes to the six exposed shader values alter uniforms without recompiling the program.
 
 ## Hinge geometry and centering
 
@@ -82,7 +82,7 @@ The shader's ray refinement, edge supersampling and 25-tap gather still need rea
 
 ## Verification and limits
 
-The translated fragment shader passed compilation on the Mac's native OpenGL driver after changing the GLSL version declaration and removing ES precision declarations. That checks shader syntax and native compiler acceptance; it does not prove identical output on all WebGL drivers.
+The translated fragment shader passed compilation on the Mac's native OpenGL driver after changing the GLSL version declaration and removing ES precision declarations. A subsequent in-app WebGL 2 startup check found the stricter numeric-conversion requirements described above. After correction, the browser compiled and linked the shader and accepted pose and parameter changes. These checks do not prove identical output on all WebGL drivers.
 
 Type checking, production compilation, and focused archive/easing tests are part of the web verification. Browser interaction QA and side-by-side pixel comparison against the Metal output have not yet been performed. In particular, browser image decoding and color management can differ from the original Metal texture-loading path.
 

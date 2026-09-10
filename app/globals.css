@@ -308,3 +308,7 @@ canvas:focus-visible {
     transition-duration: 0s !important;
   }
 }
+/* Keep the renderer visible while the controls scroll independently below it. */
+.lab { height: 100dvh; min-height: 0; overflow: hidden; }
+.controls { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+@media (orientation: landscape) and (max-height: 600px) { .demo { height: 60dvh; min-height: 160px; } }

@@ -156,6 +156,7 @@ export default function Home() {
         setRenderError('');
       } catch (e) {
         renderer.current = null;
+        console.error("Duo renderer initialization failed:", e);
         setRenderError(message(e));
       }
     };
@@ -230,6 +231,7 @@ export default function Home() {
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute(input: unknown) {
+        if (!renderer.current) throw new Error("The shader renderer is not ready.");
         if (!input || typeof input !== 'object' || Array.isArray(input))
           throw new Error('Expected a parameter object.');
         const next = { ...settingsRef.current };

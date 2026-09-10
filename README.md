@@ -46,9 +46,9 @@ npm test
 npm run build
 ```
 
-Lint covers owned application code; generated component-library sources are kept intact. Tests cover local archive integrity, parameter validation, snapshot independence, numbering and fold easing. The ported fragment shader also passed a native OpenGL compilation check using its desktop GLSL equivalent. This is not a browser GPU compatibility or frame-rate benchmark. Interactive browser QA and real mobile-device performance profiling have not been performed.
+Lint covers owned application code; generated component-library sources are kept intact. Tests cover local archive integrity, parameter validation, snapshot independence, numbering and fold easing. The shader passed native OpenGL compilation and subsequently compiled and linked in the in-app WebGL 2 browser after fixing GLSL ES numeric conversions. These are compilation checks, not a cross-browser GPU compatibility or frame-rate benchmark. Interactive browser QA and real mobile-device performance profiling have not been performed.
 
-An optional, feature-detected WebMCP `configure_duo` tool exposes expansion and the same six shader settings. It never changes images or saves versions. A supported WebMCP validation context was not available during this port, so this integration remains unverified.
+An optional, feature-detected WebMCP `configure_duo` tool exposes expansion and the same six shader settings. It never changes images or saves versions. Its registration, valid parameter updates, and rejection of out-of-range values were checked in the in-app browser.
 
 ## Sample image
 
