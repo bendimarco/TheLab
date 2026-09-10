@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { clamp, defaults, type Settings } from './settings';
 
-// Horizontal positions are fixed at thirds; vertical handles shape the falloff.
+// Both Bézier handles move freely across the unit square.
 export function BlurCurve({
   settings,
   onChange,
@@ -10,7 +10,10 @@ export function BlurCurve({
   onChange: (patch: Partial<Settings>) => void;
 }) {
   const plot = useRef<HTMLDivElement>(null);
-  const keys = ['blurCurveStart', 'blurCurveEnd'] as const;
+  const handles = [
+    ['blurCurveStartX', 'blurCurveStart'],
+    ['blurCurveEndX', 'blurCurveEnd'],
+  ] as const;
   return (
     <div className="blur-curve">
       <div className="range-label">
@@ -19,6 +22,8 @@ export function BlurCurve({
           className="curve-reset"
           onClick={() =>
             onChange({
+              blurCurveStartX: defaults.blurCurveStartX,
+              blurCurveEndX: defaults.blurCurveEndX,
               blurCurveStart: defaults.blurCurveStart,
               blurCurveEnd: defaults.blurCurveEnd,
             })
@@ -39,21 +44,21 @@ export function BlurCurve({
           />
           <path
             className="curve-tangent"
-            d={`M0 150 L100 ${150 * (1 - settings.blurCurveStart)} M300 0 L200 ${150 * (1 - settings.blurCurveEnd)}`}
+            d={`M0 150 L${300 * settings.blurCurveStartX} ${150 * (1 - settings.blurCurveStart)} M300 0 L${300 * settings.blurCurveEndX} ${150 * (1 - settings.blurCurveEnd)}`}
           />
           <path
             className="curve-line"
-            d={`M0 150 C100 ${150 * (1 - settings.blurCurveStart)} 200 ${150 * (1 - settings.blurCurveEnd)} 300 0`}
+            d={`M0 150 C${300 * settings.blurCurveStartX} ${150 * (1 - settings.blurCurveStart)} ${300 * settings.blurCurveEndX} ${150 * (1 - settings.blurCurveEnd)} 300 0`}
           />
         </svg>
-        {keys.map((key, i) => (
+        {handles.map(([xKey, key], i) => (
           <button
             key={key}
             className="curve-handle"
             aria-label={`${i === 0 ? 'Hinge' : 'Outer edge'} blur curve handle`}
             aria-describedby="curve-help"
             style={{
-              left: `${((i + 1) * 100) / 3}%`,
+              left: `${settings[xKey] * 100}%`,
               top: `${(1 - settings[key]) * 100}%`,
             }}
             onPointerDown={(e) => {
@@ -69,6 +74,7 @@ export function BlurCurve({
                 return;
               const bounds = plot.current.getBoundingClientRect();
               onChange({
+                [xKey]: clamp((e.clientX - bounds.left) / bounds.width),
                 [key]: clamp(1 - (e.clientY - bounds.top) / bounds.height),
               });
             }}
@@ -77,25 +83,40 @@ export function BlurCurve({
                 e.currentTarget.releasePointerCapture(e.pointerId);
             }}
             onKeyDown={(e) => {
-              if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key))
+              if (
+                ![
+                  'ArrowUp',
+                  'ArrowDown',
+                  'ArrowLeft',
+                  'ArrowRight',
+                  'Home',
+                  'End',
+                ].includes(e.key)
+              )
                 return;
               e.preventDefault();
+              const horizontal =
+                e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+              const axis = horizontal ? xKey : key;
               onChange({
-                [key]:
+                [axis]:
                   e.key === 'Home'
                     ? 0
                     : e.key === 'End'
                       ? 1
                       : clamp(
-                          settings[key] +
-                            (e.key === 'ArrowUp' ? 1 : -1) *
+                          settings[axis] +
+                            (e.key === 'ArrowUp' || e.key === 'ArrowRight'
+                              ? 1
+                              : -1) *
                               (e.shiftKey ? 0.1 : 0.01),
                         ),
               });
             }}
-            title={`${Math.round(settings[key] * 100)}%`}
+            title={`Position ${Math.round(settings[xKey] * 100)}%, blur ${Math.round(settings[key] * 100)}%`}
           >
             <span className="sr-only">
+              Position {Math.round(settings[xKey] * 100)} percent, blur{' '}
               {Math.round(settings[key] * 100)} percent
             </span>
           </button>
@@ -106,7 +127,8 @@ export function BlurCurve({
         <span>Free edge · blurred</span>
       </div>
       <p className="hint" id="curve-help">
-        Drag handles up for more blur, down for less. Use ↑ ↓ when focused.
+        Drag handles in any direction. Move them toward the corners for a
+        steeper curve. Arrow keys adjust; Shift moves faster.
       </p>
     </div>
   );

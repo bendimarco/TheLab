@@ -4,6 +4,8 @@ export const defaults = {
   creaseBlendWidth: 0.26,
   creaseBlurEasing: 3.3,
   edgeDarkness: 0.58,
+  blurCurveStartX: 1 / 3,
+  blurCurveEndX: 2 / 3,
   blurCurveStart: 0,
   blurCurveEnd: 0.4,
 };
@@ -14,6 +16,8 @@ export const ranges: Record<keyof Settings, [number, number]> = {
   creaseBlendWidth: [0, 1],
   creaseBlurEasing: [1, 4],
   edgeDarkness: [0, 1],
+  blurCurveStartX: [0, 1],
+  blurCurveEndX: [0, 1],
   blurCurveStart: [0, 1],
   blurCurveEnd: [0, 1],
 };
@@ -28,11 +32,37 @@ export const clamp = (value: number, min = 0, max = 1) =>
   Math.min(max, Math.max(min, value));
 export const ease = (t: number) => t * t * (3 - 2 * t);
 
-// Fixed horizontal handles give an exact cubic without a per-pixel inverse solve.
-export function blurCurve(t: number, start: number, end: number) {
-  const x = clamp(t),
-    inverse = 1 - x;
-  return (
-    3 * inverse * inverse * x * start + 3 * inverse * x * x * end + x * x * x
+// Invert the horizontal Bézier once per lookup-table sample, never per pixel.
+// Keeping both handles inside the unit square gives a monotonic spatial ramp.
+export function blurCurve(
+  x: number,
+  start: number,
+  end: number,
+  startX = 1 / 3,
+  endX = 2 / 3,
+) {
+  x = clamp(x);
+  if (x === 0 || x === 1) return x;
+  const cubic = (t: number, a: number, b: number) =>
+    3 * (1 - t) ** 2 * t * a + 3 * (1 - t) * t * t * b + t ** 3;
+  if (startX === 1 / 3 && endX === 2 / 3) return cubic(x, start, end);
+  let low = 0,
+    high = 1;
+  for (let i = 0; i < 24; i++) {
+    const t = (low + high) / 2;
+    if (cubic(t, startX, endX) < x) low = t;
+    else high = t;
+  }
+  return cubic((low + high) / 2, start, end);
+}
+export function blurCurveTable(settings: Settings) {
+  return Float32Array.from({ length: 1025 }, (_, i) =>
+    blurCurve(
+      i / 1024,
+      settings.blurCurveStart,
+      settings.blurCurveEnd,
+      settings.blurCurveStartX,
+      settings.blurCurveEndX,
+    ),
   );
 }

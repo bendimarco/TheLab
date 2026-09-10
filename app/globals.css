@@ -313,8 +313,8 @@ canvas:focus-visible {
 }
 .curve-plot {
   position: relative;
-  height: 150px;
-  margin: 24px 16px 16px;
+  height: 190px;
+  margin: 24px 20px 20px;
   border: 1px solid #d5d8dc;
   border-radius: 8px;
   background: #fff9;
@@ -345,7 +345,7 @@ canvas:focus-visible {
   height: 36px;
   transform: translate(-50%, -50%);
   touch-action: none;
-  cursor: ns-resize;
+  cursor: move;
   border-radius: 50%;
 }
 .curve-handle::after {

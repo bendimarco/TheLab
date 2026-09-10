@@ -1,6 +1,16 @@
 #version 300 es
 precision highp float;
 precision highp int;
+uniform highp sampler2D blurProfile;
+
+// Manual interpolation avoids requiring floating-point linear-filter extensions.
+float spatialBlurCurve(float x) {
+    float position = clamp(x, 0.0, 1.0) * 1024.0;
+    int index = min(int(floor(position)), 1023);
+    return mix(texelFetch(blurProfile, ivec2(index, 0), 0).r,
+               texelFetch(blurProfile, ivec2(index + 1, 0), 0).r, position - float(index));
+}
+
 #define PI 3.14159265358979323846
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 
@@ -106,9 +116,7 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     float endShift = saturate(u.frontBlur.z) * tilt * tilt * tilt * tilt;
     // Shape the spatial ramp before moving its clear boundary. Compressing the
     // ramp preserves a gradient all the way to the free edge (no clamped plateau).
-    float inverseX = 1.0 - x;
-    float curvedX = 3.0 * inverseX * inverseX * x * saturate(u.creaseBlur.z)
-                  + 3.0 * inverseX * x * x * saturate(u.creaseBlur.w) + x * x * x;
+    float curvedX = spatialBlurCurve(x);
     float blurX = mix(curvedX, 1.0, endShift);
     float panelWidth = inside ? w - bezel : viewport.x;
     float creaseWeight = creaseBlurWeight(abs(flatX - anchorX) + endShift * panelWidth,

@@ -58,7 +58,7 @@ The public Italy collection contains four photos supplied by Ben DiMarco. `P1001
 
 Files live in `public/photos/italy/`. Add a landscape JPEG (up to 2048 px wide) and a 360 px thumbnail named `<id>-thumb.jpg`, then add the ID and label to `projects/001-duo-expansion/samples.ts`. The first entry is the default. Exported copies use JPEG compression and omit EXIF metadata; originals are unchanged. Only the selected full-size photo is decoded, and thumbnail loading is deferred.
 
-The Blur curve editor has two vertical handles: drag with a mouse or touch, or focus a handle and use Up/Down (Shift for larger steps). Reset restores the progressive default; saved versions include the curve. These controls are available to every visitor who can access the site and affect only their own session.
+The Blur curve editor has two handles that move horizontally and vertically across the full graph: drag with a mouse or touch, or focus a handle and use the arrow keys (Shift for larger steps). Move the handles toward the corners to create much steeper falloffs. Reset restores the progressive default; saved versions include the curve. These controls are available to every visitor who can access the site and affect only their own session.
 
 Canvas resizing draws synchronously after updating its backing buffer. This prevents the cleared opaque buffer from appearing black during inspector transitions; unchanged pixel dimensions are not reassigned.
 

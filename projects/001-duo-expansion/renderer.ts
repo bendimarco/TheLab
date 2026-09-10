@@ -1,5 +1,11 @@
 import fragment from './duo.frag?raw';
-import { clamp, defaults, ease, type Settings } from './settings';
+import {
+  blurCurveTable,
+  clamp,
+  defaults,
+  ease,
+  type Settings,
+} from './settings';
 
 const vertex = `#version 300 es
 out vec2 vUV;
@@ -13,6 +19,8 @@ export class DuoRenderer {
   private gl: WebGL2RenderingContext;
   private program: WebGLProgram;
   private texture: WebGLTexture;
+  private curveTexture: WebGLTexture;
+  private curveKey = '';
   private uniforms = new Map<string, WebGLUniformLocation | null>();
   private frame = 0;
   private animation?: {
@@ -89,6 +97,15 @@ export class DuoRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.uniform1i(gl.getUniformLocation(this.program, 'photo'), 0);
+    this.curveTexture = gl.createTexture()!;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.curveTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.uniform1i(gl.getUniformLocation(this.program, 'blurProfile'), 1);
+    gl.activeTexture(gl.TEXTURE0);
   }
 
   setImage(source: HTMLCanvasElement) {
@@ -192,6 +209,29 @@ export class DuoRenderer {
       s.blurCurveStart,
       s.blurCurveEnd,
     ]);
+    const curveKey = [
+      s.blurCurveStartX,
+      s.blurCurveStart,
+      s.blurCurveEndX,
+      s.blurCurveEnd,
+    ].join(',');
+    if (curveKey !== this.curveKey) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.curveTexture);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.R32F,
+        1025,
+        1,
+        0,
+        gl.RED,
+        gl.FLOAT,
+        blurCurveTable(s),
+      );
+      gl.activeTexture(gl.TEXTURE0);
+      this.curveKey = curveKey;
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (this.animation) this.requestDraw();
   };
@@ -199,6 +239,7 @@ export class DuoRenderer {
     this.disposed = true;
     cancelAnimationFrame(this.frame);
     this.gl.deleteTexture(this.texture);
+    this.gl.deleteTexture(this.curveTexture);
     this.gl.deleteProgram(this.program);
   }
 }

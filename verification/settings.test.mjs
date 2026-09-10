@@ -26,9 +26,8 @@ for (const file of ['settings', 'versions', 'renderer']) {
     .outputText.replace("'./settings'", "'./settings.mjs'");
   await writeFile(join(dir, `${file}.mjs`), output);
 }
-const { defaults, validSettings, ease, blurCurve } = await import(
-  pathToFileURL(join(dir, 'settings.mjs'))
-);
+const { defaults, validSettings, ease, blurCurve, blurCurveTable } =
+  await import(pathToFileURL(join(dir, 'settings.mjs')));
 const { addVersion, parseArchive, emptyArchive } = await import(
   pathToFileURL(join(dir, 'versions.mjs'))
 );
@@ -217,7 +216,70 @@ test('new sessions start with the chosen Version 1 tuning', () => {
     creaseBlendWidth: 0.26,
     creaseBlurEasing: 3.3,
     edgeDarkness: 0.58,
+    blurCurveStartX: 1 / 3,
+    blurCurveEndX: 2 / 3,
     blurCurveStart: 0,
     blurCurveEnd: 0.4,
   });
+});
+
+test('freely moving handles produce extreme curves with finite, monotonic lookup samples', () => {
+  for (const startX of [0, 0.5, 1])
+    for (const endX of [0, 0.5, 1])
+      for (const start of [0, 1])
+        for (const end of [0, 1]) {
+          const table = blurCurveTable({
+            ...defaults,
+            blurCurveStartX: startX,
+            blurCurveEndX: endX,
+            blurCurveStart: start,
+            blurCurveEnd: end,
+          });
+          assert.equal(table[0], 0);
+          assert.equal(table.at(-1), 1);
+          for (let i = 1; i < table.length; i++)
+            assert.ok(
+              Number.isFinite(table[i]) &&
+                table[i] >= table[i - 1] &&
+                table[i] <= 1,
+            );
+        }
+  assert.ok(blurCurve(0.5, 0, 0, 1, 1) < 0.01);
+  assert.ok(blurCurve(0.5, 1, 1, 0, 0) > 0.99);
+});
+
+test('existing vertical-only curves migrate without changing their profile; XY handles persist', () => {
+  const old = addVersion(
+    emptyArchive(),
+    defaults,
+    'old',
+    '2026-09-10T12:00:00Z',
+  );
+  delete old.versions[0].settings.blurCurveStartX;
+  delete old.versions[0].settings.blurCurveEndX;
+  const migrated = parseArchive(JSON.stringify(old)).versions[0].settings;
+  assert.equal(migrated.blurCurveStartX, 1 / 3);
+  assert.equal(migrated.blurCurveEndX, 2 / 3);
+  for (let i = 0; i <= 100; i++) {
+    const x = i / 100;
+    assert.ok(
+      Math.abs(
+        blurCurve(
+          x,
+          migrated.blurCurveStart,
+          migrated.blurCurveEnd,
+          migrated.blurCurveStartX,
+          migrated.blurCurveEndX,
+        ) -
+          (1.2 * (1 - x) * x * x + x * x * x),
+      ) < 1e-12,
+    );
+  }
+  const custom = addVersion(
+    emptyArchive(),
+    { ...defaults, blurCurveStartX: 1, blurCurveEndX: 0 },
+    'xy',
+    '2026-09-10T12:00:00Z',
+  );
+  assert.deepEqual(parseArchive(JSON.stringify(custom)), custom);
 });

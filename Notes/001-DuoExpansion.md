@@ -95,11 +95,13 @@ Start with `settings.ts` for the current editable values, then `renderer.ts` for
 
 ### Editable spatial blur curve
 
-The spatial falloff now uses a cubic Bézier with fixed endpoints (0, 0) and (1, 1). Its two control points have horizontal positions 1/3 and 2/3; their heights are editable. This makes the horizontal coordinate equal the polynomial parameter, so evaluation costs a few multiplications with no inverse-curve iteration and no extra texture reads. The tradeoff is vertical-only handle movement rather than an unrestricted timing-curve editor.
+The spatial falloff now uses a cubic Bézier with fixed endpoints (0, 0) and (1, 1). In the web renderer, both control points can now move across the unit square. Horizontal movement changes where the falloff accelerates, permitting a much steeper ramp than the former fixed-third positions. Endpoints remain fixed, and keeping the handles within the unit square preserves a monotonic blur profile even when the handles cross.
+
+With movable horizontal positions, Bézier parameter t is no longer image coordinate x. The CPU solves x(t) with 24 bisection steps for each of 1,025 samples only when the curve changes. A 4 KB R32F texture stores that profile. The fragment shader interpolates two neighboring samples using texelFetch, avoiding both a per-pixel inverse solve and a float-linear-filter extension. This trades two cached texture fetches for flexible curvature; extremely steep profiles are approximated at 1/1,024 of the panel width. GPU performance has not been benchmarked.
 
 The default heights, 0 and 0.4, keep the middle of the turning image clearer while preserving full blur at the free edge. Both front and inside use this same spatial profile. The curve is applied before the fixed 24% angular boundary shift: `mix(curve(x), 1, shift)`. This retains a little blur at the hinge during strong folds without saturating an entire outer strip at maximum blur. Main and diagonal blur share the coordinate; darkness remains independent. The existing projected crease blend still gates the result.
 
-Older saved versions acquire neutral curve heights of 1/3 and 2/3. New versions store both heights. The fixed boundary shift and revised non-clamping ramp apply to every version, so historical renders can differ from the previous additive-clamp algorithm.
+Older saved versions acquire neutral curve heights of 1/3 and 2/3. Web versions store both coordinates of each handle. Versions saved before horizontal movement acquire x coordinates 1/3 and 2/3, preserving their exact prior shape. The fixed boundary shift and revised non-clamping ramp apply to every version, so historical renders can differ from the previous additive-clamp algorithm.
 
 
 ### Covering the first visible wedge
