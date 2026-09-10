@@ -142,8 +142,11 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     float softness = max(0.0001, u.frontCorner.z + diagonalRadius / viewport.y);
     float top = 1.0 - smoothstep(depth - softness, depth + softness, localUV.y);
     float bottom = 1.0 - smoothstep(depth - softness, depth + softness, 1.0 - localUV.y);
+    // Keep the first/last ~14 degrees lighter without delaying wedge blur.
+    // The geometric visibility still reaches zero at the exact flat endpoint.
+    float cornerEndpointFade = mix(0.45, 1.0, smoothstep(0.0, 0.24, treatmentAngle));
     float corner = u.frontCorner.y > 0.0
-        ? saturate(u.frontCorner.x) * max(saturate(turn * 4.0), wedgeVisibility) * max(top, bottom) * hingeProtection : 0.0;
+        ? saturate(u.frontCorner.x) * cornerEndpointFade * max(saturate(turn * 4.0), wedgeVisibility) * max(top, bottom) * hingeProtection : 0.0;
     return color * (1.0 - dark) * (1.0 - corner);
 }
 
