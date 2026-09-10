@@ -1,8 +1,23 @@
 'use client';
 /* eslint-disable jsx-a11y/prefer-tag-over-role -- The custom GPU canvas has keyboard slider semantics. */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, History, Trash2, Upload, Shuffle, Check } from 'lucide-react';
+import {
+  Plus,
+  History,
+  Trash2,
+  Upload,
+  Shuffle,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
+import {
+  Sheet,
+  SheetTrigger,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { DuoRenderer } from '@/projects/001-duo-expansion/renderer';
 import {
   defaults,
@@ -98,7 +113,7 @@ export default function Home() {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [fileCount, setFileCount] = useState(0);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [archive, setArchive] = useState<Archive>(emptyArchive);
   const [archiveError, setArchiveError] = useState('');
@@ -156,7 +171,7 @@ export default function Home() {
         setRenderError('');
       } catch (e) {
         renderer.current = null;
-        console.error("Duo renderer initialization failed:", e);
+        console.error('Duo renderer initialization failed:', e);
         setRenderError(message(e));
       }
     };
@@ -231,7 +246,8 @@ export default function Home() {
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute(input: unknown) {
-        if (!renderer.current) throw new Error("The shader renderer is not ready.");
+        if (!renderer.current)
+          throw new Error('The shader renderer is not ready.');
         if (!input || typeof input !== 'object' || Array.isArray(input))
           throw new Error('Expected a parameter object.');
         const next = { ...settingsRef.current };
@@ -368,364 +384,380 @@ export default function Home() {
     if (await changeImage(files[next])) imageIndex.current = next;
   }
   return (
-    <main className={`lab ${panelOpen ? '' : 'panel-closed'}`}>
-      <section
-        className="demo"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          void upload(Array.from(e.dataTransfer.files));
-        }}
-      >
-        {/* The canvas is a keyboard-operable, continuously adjustable rendered surface. */}
-        <canvas
-          ref={canvas}
-          tabIndex={0}
-          role="slider"
-          aria-label="Duo expansion. Drag left to open, right to close. In landscape, tap to animate."
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(progress * 100)}
-          onKeyDown={(e) => {
-            if (
-              ['ArrowLeft', 'ArrowRight', 'Home', 'End', ' '].includes(e.key)
-            ) {
-              e.preventDefault();
-              const p = renderer.current?.progress ?? progress;
-              if (e.key === ' ') animate(p >= 0.5 ? 0 : 1);
-              else
-                scrub(
-                  e.key === 'Home'
-                    ? 0
-                    : e.key === 'End'
-                      ? 1
-                      : clamp(p + (e.key === 'ArrowRight' ? 0.025 : -0.025)),
-                );
-            }
-          }}
-          onPointerDown={(e) => {
-            if (!renderer.current || e.button !== 0) return;
-            renderer.current.stop();
-            pointer.current = {
-              id: e.pointerId,
-              x: e.clientX,
-              y: e.clientY,
-              progress: renderer.current.progress,
-              moved: false,
-            };
-            e.currentTarget.setPointerCapture(e.pointerId);
-          }}
-          onPointerMove={(e) => {
-            const p = pointer.current;
-            if (!p || p.id !== e.pointerId) return;
-            const dx = e.clientX - p.x;
-            if (Math.hypot(dx, e.clientY - p.y) > 5) p.moved = true;
-            if (p.moved && Math.abs(dx) > Math.abs(e.clientY - p.y))
-              scrub(
-                clamp(
-                  p.progress -
-                    dx / Math.max(140, e.currentTarget.clientWidth * 0.55),
-                ),
-              );
-          }}
-          onPointerUp={(e) => {
-            const p = pointer.current;
-            if (!p || p.id !== e.pointerId) return;
-            pointer.current = null;
-            if (e.currentTarget.hasPointerCapture(e.pointerId))
-              e.currentTarget.releasePointerCapture(e.pointerId);
-            if (!p.moved && window.innerWidth > window.innerHeight)
-              animate((renderer.current?.progress ?? 0) >= 0.5 ? 0 : 1);
-          }}
-          onPointerCancel={() => {
-            pointer.current = null;
-          }}
-        />
-        {renderError && (
-          <p role="alert" className="error">
-            {renderError}
-          </p>
-        )}
-        {fileCount > 1 && (
-          <button
-            className="glass shuffle"
-            aria-label="Shuffle images"
-            title="Shuffle images"
-            disabled={busy}
-            onClick={() => void shuffle()}
-          >
-            <Shuffle size={18} />
-          </button>
-        )}
-      </section>
-      <button
-        className="handle"
-        onClick={() => setPanelOpen(!panelOpen)}
-        aria-label={panelOpen ? 'Hide controls' : 'Show controls'}
-        aria-expanded={panelOpen}
-      >
-        <span />
-      </button>
-      <section
-        className="controls"
-        hidden={!panelOpen}
-        aria-label="Shader controls"
-      >
-        <div className="control-inner">
-          <div className="toolbar">
+    <Sheet
+      open={panelOpen}
+      onOpenChange={setPanelOpen}
+      modal={false}
+      disablePointerDismissal
+    >
+      <main className={`lab ${panelOpen ? 'panel-open' : ''}`}>
+        <SheetTrigger
+          render={
             <button
-              className="glass icon"
-              aria-label="Save version"
-              title="Save version"
-              disabled={!!archiveError}
-              onClick={() =>
-                updateArchive(
-                  addVersion(
-                    archive,
-                    settingsRef.current,
-                    crypto.randomUUID(),
-                    new Date().toISOString(),
-                  ),
-                  `Saved Version ${archive.nextNumber}`,
-                )
+              className="glass icon modify"
+              aria-label="Modify"
+              title="Modify"
+            />
+          }
+        >
+          <SlidersHorizontal size={19} />
+        </SheetTrigger>
+        <section
+          className="demo"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            void upload(Array.from(e.dataTransfer.files));
+          }}
+        >
+          {/* The canvas is a keyboard-operable, continuously adjustable rendered surface. */}
+          <canvas
+            ref={canvas}
+            tabIndex={0}
+            role="slider"
+            aria-label="Duo expansion. Drag left to open, right to close. In landscape, tap to animate."
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress * 100)}
+            onKeyDown={(e) => {
+              if (
+                ['ArrowLeft', 'ArrowRight', 'Home', 'End', ' '].includes(e.key)
+              ) {
+                e.preventDefault();
+                const p = renderer.current?.progress ?? progress;
+                if (e.key === ' ') animate(p >= 0.5 ? 0 : 1);
+                else
+                  scrub(
+                    e.key === 'Home'
+                      ? 0
+                      : e.key === 'End'
+                        ? 1
+                        : clamp(p + (e.key === 'ArrowRight' ? 0.025 : -0.025)),
+                  );
               }
-            >
-              <Plus size={19} />
-            </button>
-            <button
-              className={`glass icon ${historyOpen ? 'selected' : ''}`}
-              aria-label="Saved versions"
-              title="Saved versions"
-              aria-expanded={historyOpen}
-              onClick={() => setHistoryOpen(!historyOpen)}
-            >
-              <History size={18} />
-            </button>
-          </div>
-          {(status || error || archiveError) && (
-            <p
-              className={`status ${error || archiveError ? 'failure' : ''}`}
-              role={error || archiveError ? 'alert' : 'status'}
-            >
-              {error || archiveError || status}
+            }}
+            onPointerDown={(e) => {
+              if (!renderer.current || e.button !== 0) return;
+              renderer.current.stop();
+              pointer.current = {
+                id: e.pointerId,
+                x: e.clientX,
+                y: e.clientY,
+                progress: renderer.current.progress,
+                moved: false,
+              };
+              e.currentTarget.setPointerCapture(e.pointerId);
+            }}
+            onPointerMove={(e) => {
+              const p = pointer.current;
+              if (!p || p.id !== e.pointerId) return;
+              const dx = e.clientX - p.x;
+              if (Math.hypot(dx, e.clientY - p.y) > 5) p.moved = true;
+              if (p.moved && Math.abs(dx) > Math.abs(e.clientY - p.y))
+                scrub(
+                  clamp(
+                    p.progress -
+                      dx / Math.max(140, e.currentTarget.clientWidth * 0.55),
+                  ),
+                );
+            }}
+            onPointerUp={(e) => {
+              const p = pointer.current;
+              if (!p || p.id !== e.pointerId) return;
+              pointer.current = null;
+              if (e.currentTarget.hasPointerCapture(e.pointerId))
+                e.currentTarget.releasePointerCapture(e.pointerId);
+              if (!p.moved && window.innerWidth > window.innerHeight)
+                animate((renderer.current?.progress ?? 0) >= 0.5 ? 0 : 1);
+            }}
+            onPointerCancel={() => {
+              pointer.current = null;
+            }}
+          />
+          {renderError && (
+            <p role="alert" className="error">
+              {renderError}
             </p>
           )}
-          {historyOpen && (
-            <div className="versions">
-              {!archive.versions.length && (
-                <p className="hint">No saved versions yet.</p>
-              )}
-              {archive.versions.map((v) => (
-                <div className="version" key={v.id}>
-                  <div className="version-info">
-                    <input
-                      aria-label={`Name for ${v.name}`}
-                      defaultValue={v.name}
-                      maxLength={80}
-                      onBlur={(e) => {
-                        const name = e.target.value.trim();
-                        if (!name) {
-                          e.target.value = v.name;
-                          return;
-                        }
-                        if (name !== v.name)
-                          updateArchive(
-                            {
-                              ...archive,
-                              versions: archive.versions.map((row) =>
-                                row.id === v.id ? { ...row, name } : row,
-                              ),
-                            },
-                            'Version renamed.',
-                          );
+          {fileCount > 1 && (
+            <button
+              className="glass shuffle"
+              aria-label="Shuffle images"
+              title="Shuffle images"
+              disabled={busy}
+              onClick={() => void shuffle()}
+            >
+              <Shuffle size={18} />
+            </button>
+          )}
+        </section>
+        <SheetContent className="controls" side="right" showCloseButton={false}>
+          <SheetTitle className="sr-only">Modify shader</SheetTitle>
+          <div className="control-inner">
+            <div className="toolbar">
+              <div className="version-actions">
+                <button
+                  className="glass icon"
+                  aria-label="Save version"
+                  title="Save version"
+                  disabled={!!archiveError}
+                  onClick={() =>
+                    updateArchive(
+                      addVersion(
+                        archive,
+                        settingsRef.current,
+                        crypto.randomUUID(),
+                        new Date().toISOString(),
+                      ),
+                      `Saved Version ${archive.nextNumber}`,
+                    )
+                  }
+                >
+                  <Plus size={19} />
+                </button>
+                <button
+                  className={`glass icon ${historyOpen ? 'selected' : ''}`}
+                  aria-label="Saved versions"
+                  title="Saved versions"
+                  aria-expanded={historyOpen}
+                  onClick={() => setHistoryOpen(!historyOpen)}
+                >
+                  <History size={18} />
+                </button>
+              </div>
+              <SheetClose
+                render={
+                  <button
+                    className="glass icon"
+                    aria-label="Close controls"
+                    title="Close controls"
+                  />
+                }
+              >
+                <X size={18} />
+              </SheetClose>
+            </div>
+            {(status || error || archiveError) && (
+              <p
+                className={`status ${error || archiveError ? 'failure' : ''}`}
+                role={error || archiveError ? 'alert' : 'status'}
+              >
+                {error || archiveError || status}
+              </p>
+            )}
+            {historyOpen && (
+              <div className="versions">
+                {!archive.versions.length && (
+                  <p className="hint">No saved versions yet.</p>
+                )}
+                {archive.versions.map((v) => (
+                  <div className="version" key={v.id}>
+                    <div className="version-info">
+                      <input
+                        aria-label={`Name for ${v.name}`}
+                        defaultValue={v.name}
+                        maxLength={80}
+                        onBlur={(e) => {
+                          const name = e.target.value.trim();
+                          if (!name) {
+                            e.target.value = v.name;
+                            return;
+                          }
+                          if (name !== v.name)
+                            updateArchive(
+                              {
+                                ...archive,
+                                versions: archive.versions.map((row) =>
+                                  row.id === v.id ? { ...row, name } : row,
+                                ),
+                              },
+                              'Version renamed.',
+                            );
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                      />
+                      <time dateTime={v.savedAt}>
+                        {new Date(v.savedAt).toLocaleString(undefined, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })}
+                      </time>
+                    </div>
+                    <button
+                      className="glass"
+                      onClick={() => {
+                        applySettings({ ...v.settings });
+                        setStatus(`Restored ${v.name}`);
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                      }}
-                    />
-                    <time dateTime={v.savedAt}>
-                      {new Date(v.savedAt).toLocaleString(undefined, {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      })}
-                    </time>
+                    >
+                      Restore
+                    </button>
+                    <button
+                      className="delete"
+                      aria-label={`Delete ${v.name}`}
+                      onClick={() =>
+                        updateArchive(
+                          {
+                            ...archive,
+                            versions: archive.versions.filter(
+                              (row) => row.id !== v.id,
+                            ),
+                          },
+                          `Deleted ${v.name}`,
+                        )
+                      }
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
+                ))}
+                <p className="hint">
+                  Saved on this browser. Click a name to edit it.
+                </p>
+              </div>
+            )}
+            <div className="pose">
+              <Range
+                label="Expansion"
+                value={progress}
+                max={1}
+                step={0.001}
+                format={percent}
+                onChange={scrub}
+              />
+              <div className="presets">
+                {[
+                  ['Closed', 0],
+                  ['Front', 0.25],
+                  ['Inside', 0.75],
+                  ['Open', 1],
+                ].map(([name, n]) => (
                   <button
                     className="glass"
-                    onClick={() => {
-                      applySettings({ ...v.settings });
-                      setStatus(`Restored ${v.name}`);
-                    }}
+                    key={name}
+                    onClick={() => animate(Number(n))}
                   >
-                    Restore
+                    {name}
                   </button>
-                  <button
-                    className="delete"
-                    aria-label={`Delete ${v.name}`}
-                    onClick={() =>
-                      updateArchive(
-                        {
-                          ...archive,
-                          versions: archive.versions.filter(
-                            (row) => row.id !== v.id,
-                          ),
-                        },
-                        `Deleted ${v.name}`,
-                      )
-                    }
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-              <p className="hint">
-                Saved on this browser. Click a name to edit it.
-              </p>
+                ))}
+              </div>
             </div>
-          )}
-          <div className="pose">
-            <Range
-              label="Expansion"
-              value={progress}
-              max={1}
-              step={0.001}
-              format={percent}
-              onChange={scrub}
-            />
-            <div className="presets">
-              {[
-                ['Closed', 0],
-                ['Front', 0.25],
-                ['Inside', 0.75],
-                ['Open', 1],
-              ].map(([name, n]) => (
-                <button
-                  className="glass"
-                  key={name}
-                  onClick={() => animate(Number(n))}
-                >
-                  {name}
-                </button>
-              ))}
+            <div className="parameter-grid">
+              <Range
+                label="Animation duration"
+                value={duration}
+                min={0.25}
+                max={6}
+                step={0.05}
+                format={(n) => `${n.toFixed(2)} s`}
+                onChange={(n) => {
+                  setDuration(n);
+                  try {
+                    localStorage.setItem('weblab.duo.duration', String(n));
+                  } catch {
+                    /* Optional preference. */
+                  }
+                }}
+              />
+              <Range
+                label="Progressive blur"
+                value={settings.blurRadius}
+                max={80}
+                step={1}
+                format={pixels}
+                onChange={(n) =>
+                  applySettings({ ...settingsRef.current, blurRadius: n })
+                }
+              />
+              <Range
+                label="Diagonal blur"
+                value={settings.diagonalBlurRadius}
+                max={60}
+                step={1}
+                format={pixels}
+                onChange={(n) =>
+                  applySettings({
+                    ...settingsRef.current,
+                    diagonalBlurRadius: n,
+                  })
+                }
+              />
+              <Range
+                label="Crease blend width"
+                value={settings.creaseBlendWidth}
+                max={1}
+                format={percent}
+                onChange={(n) =>
+                  applySettings({ ...settingsRef.current, creaseBlendWidth: n })
+                }
+              />
+              <Range
+                label="Blur easing"
+                value={settings.creaseBlurEasing}
+                min={1}
+                max={4}
+                step={0.1}
+                format={(n) => n.toFixed(1)}
+                onChange={(n) =>
+                  applySettings({ ...settingsRef.current, creaseBlurEasing: n })
+                }
+              />
+              <Range
+                label="Edge darkening"
+                value={settings.edgeDarkness}
+                max={1}
+                format={percent}
+                onChange={(n) =>
+                  applySettings({ ...settingsRef.current, edgeDarkness: n })
+                }
+              />
+            </div>
+            <p className="hint">
+              Drag to fold. Tap in landscape to open or close.
+            </p>
+            <div className="media-actions">
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif"
+                multiple
+                hidden
+                onChange={(e) => {
+                  void upload(Array.from(e.target.files ?? []));
+                  e.target.value = '';
+                }}
+              />
+              <button
+                className="glass upload"
+                disabled={busy}
+                onClick={() => fileInput.current?.click()}
+              >
+                <Upload size={17} />
+                {busy ? 'Opening image…' : 'Upload landscape images'}
+              </button>
+              <button
+                className="text-button"
+                disabled={busy}
+                onClick={async () => {
+                  if (await changeImage()) {
+                    imageFiles.current = [];
+                    imageIndex.current = -1;
+                    setFileCount(0);
+                    setStatus('Sample image restored.');
+                  }
+                }}
+              >
+                Use sample photo
+              </button>
+            </div>
+            <div className="footer">
+              <span className="hint">Images stay on your device.</span>
             </div>
           </div>
-          <div className="parameter-grid">
-            <Range
-              label="Animation duration"
-              value={duration}
-              min={0.25}
-              max={6}
-              step={0.05}
-              format={(n) => `${n.toFixed(2)} s`}
-              onChange={(n) => {
-                setDuration(n);
-                try {
-                  localStorage.setItem('weblab.duo.duration', String(n));
-                } catch {
-                  /* Optional preference. */
-                }
-              }}
-            />
-            <Range
-              label="Progressive blur"
-              value={settings.blurRadius}
-              max={80}
-              step={1}
-              format={pixels}
-              onChange={(n) =>
-                applySettings({ ...settingsRef.current, blurRadius: n })
-              }
-            />
-            <Range
-              label="Diagonal blur"
-              value={settings.diagonalBlurRadius}
-              max={60}
-              step={1}
-              format={pixels}
-              onChange={(n) =>
-                applySettings({ ...settingsRef.current, diagonalBlurRadius: n })
-              }
-            />
-            <Range
-              label="Crease blend width"
-              value={settings.creaseBlendWidth}
-              max={1}
-              format={percent}
-              onChange={(n) =>
-                applySettings({ ...settingsRef.current, creaseBlendWidth: n })
-              }
-            />
-            <Range
-              label="Blur easing"
-              value={settings.creaseBlurEasing}
-              min={1}
-              max={4}
-              step={0.1}
-              format={(n) => n.toFixed(1)}
-              onChange={(n) =>
-                applySettings({ ...settingsRef.current, creaseBlurEasing: n })
-              }
-            />
-            <Range
-              label="Edge darkening"
-              value={settings.edgeDarkness}
-              max={1}
-              format={percent}
-              onChange={(n) =>
-                applySettings({ ...settingsRef.current, edgeDarkness: n })
-              }
-            />
-          </div>
-          <p className="hint">
-            Drag to fold. Tap in landscape to open or close.
-          </p>
-          <div className="media-actions">
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif"
-              multiple
-              hidden
-              onChange={(e) => {
-                void upload(Array.from(e.target.files ?? []));
-                e.target.value = '';
-              }}
-            />
-            <button
-              className="glass upload"
-              disabled={busy}
-              onClick={() => fileInput.current?.click()}
-            >
-              <Upload size={17} />
-              {busy ? 'Opening image…' : 'Upload landscape images'}
-            </button>
-            <button
-              className="text-button"
-              disabled={busy}
-              onClick={async () => {
-                if (await changeImage()) {
-                  imageFiles.current = [];
-                  imageIndex.current = -1;
-                  setFileCount(0);
-                  setStatus('Sample image restored.');
-                }
-              }}
-            >
-              Use sample photo
-            </button>
-          </div>
-          <div className="footer">
-            <span className="hint">Images stay on your device.</span>
-            <button
-              className="glass icon"
-              aria-label="Hide controls"
-              onClick={() => setPanelOpen(false)}
-            >
-              <Check size={18} />
-            </button>
-          </div>
-        </div>
-      </section>
-    </main>
+        </SheetContent>
+      </main>
+    </Sheet>
   );
 }

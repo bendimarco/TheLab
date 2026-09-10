@@ -23,7 +23,7 @@ Open the local URL printed by the server. `npm run build` creates the production
 - Versions and animation duration stay in this browser's local storage. Clearing site data removes them. A local preview and the hosted site have separate storage.
 - Image decoding and rendering happen on your device. Images are not uploaded to a server or added to this repository. Refreshing returns to the bundled sample; choose your images again.
 
-The controls dock below the demo rather than covering it. Use the handle to hide or reopen them. Browser CSS approximates the native translucent controls; it does not use Apple's Liquid Glass APIs.
+The controls start hidden. Use the sliders icon to open the floating right-side inspector, and its close button, the same icon, or Escape to dismiss it. The panel has a 12 px inset and rounded corners; the demo moves into the remaining space while it slides in. The inspector is nonmodal so the demo remains interactive. Browser CSS approximates the native translucent controls; it does not use Apple's Liquid Glass APIs.
 
 Blur end shift is fixed at 24% in both renderers; saved versions cannot override it.
 
