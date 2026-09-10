@@ -25,7 +25,7 @@ Open the local URL printed by the server. `npm run build` creates the production
 
 The controls dock below the demo rather than covering it. Use the handle to hide or reopen them. Browser CSS approximates the native translucent controls; it does not use Apple's Liquid Glass APIs.
 
-Blur end shift is fixed at 30% in both renderers; saved versions cannot override it.
+Blur end shift is fixed at 24% in both renderers; saved versions cannot override it.
 
 ## Source map
 

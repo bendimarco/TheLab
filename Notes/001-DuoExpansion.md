@@ -8,7 +8,7 @@ The key illusion is that the frame rotates in perspective while the photograph b
 
 This ports the current `DuoMedia.metal` implementation from SwiftLab after the rollback of the later edge-spreading blur, residual blur, fold-darkness and motion-smear additions. It retains the original projected crease easing and now adds a tilt-dependent blur-end shift. Those reverted effects are deliberately absent.
 
-The web shader preserves the Swift defaults: 36-point progressive blur, 16-point diagonal blur, 45% crease blend width, easing exponent 1.5, 58% edge darkening, and a fixed 30% blur-end shift. Web blur distances are expressed in CSS pixels, the logical-coordinate counterpart to SwiftUI points. Matching logical viewport and panel dimensions gives the closest comparison.
+The web shader preserves the Swift defaults: 36-point progressive blur, 16-point diagonal blur, 45% crease blend width, easing exponent 1.5, 58% edge darkening, and a fixed 24% blur-end shift. Web blur distances are expressed in CSS pixels, the logical-coordinate counterpart to SwiftUI points. Matching logical viewport and panel dimensions gives the closest comparison.
 
 ## Rendering architecture
 
@@ -66,9 +66,9 @@ The original sharp hinge can dominate the image as foreshortening compresses the
 
 Both factors that previously protected the hinge must move. The projected crease distance gains `shift × panelWidth`; the local blur ramp uses `clamp(x + shift)` instead of `x`. The diagonal blur uses the shifted coordinate as well. Merely increasing radius, or moving only one of the two masks, would leave an unblurred strip.
 
-The shift amount is fixed at 0.30. Saved versions cannot override it. Maximum blur remains bounded by the existing blur radii, and no additional texture samples are needed. The dark-gradient and wedge-opacity coordinates are unchanged. WebGL and Metal use the same formula and uniform slot.
+The shift amount is fixed at 0.24. Saved versions cannot override it. Maximum blur remains bounded by the existing blur radii, and no additional texture samples are needed. The dark-gradient and wedge-opacity coordinates are unchanged. WebGL and Metal use the same formula and uniform slot.
 
-The glass-reflection coating has been removed. Old versions ignore both their reflection and end-shift values; the renderer always supplies a 0.30 shift. The polished rim still uses its rounded normal, bright ambient floor, broad and narrow highlights, and grazing response. Keeping the metal lighting preserves the hardware cue without overlaying reflections on the photo.
+The glass-reflection coating has been removed. Old versions ignore both their reflection and end-shift values; the renderer always supplies a 0.24 shift. The polished rim still uses its rounded normal, bright ambient floor, broad and narrow highlights, and grazing response. Keeping the metal lighting preserves the hardware cue without overlaying reflections on the photo.
 
 ## Edge sampling and resource costs
 
