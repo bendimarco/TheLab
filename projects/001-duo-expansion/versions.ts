@@ -30,6 +30,12 @@ export function parseArchive(raw: string | null): Archive {
     );
   const ids = new Set<string>();
   for (const v of value.versions) {
+    // Preserve existing versions while retiring the removed reflection control.
+    if (v?.settings && typeof v.settings === 'object') {
+      const settings = { ...v.settings };
+      delete settings.glassReflection;
+      v.settings = { ...settings, blurEndShift: settings.blurEndShift ?? 0 };
+    }
     if (
       typeof v.id !== 'string' ||
       ids.has(v.id) ||

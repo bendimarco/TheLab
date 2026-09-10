@@ -627,12 +627,12 @@ export default function Home() {
               }}
             />
             <Range
-              label="Glass reflection"
-              value={settings.glassReflection}
+              label="Blur end shift"
+              value={settings.blurEndShift}
               max={1}
               format={percent}
               onChange={(n) =>
-                applySettings({ ...settingsRef.current, glassReflection: n })
+                applySettings({ ...settingsRef.current, blurEndShift: n })
               }
             />
             <Range

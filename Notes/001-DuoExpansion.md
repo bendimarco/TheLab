@@ -2,13 +2,13 @@
 
 Duo folds a narrow screen outward around its left edge to reveal a screen twice as wide. The assembly shifts horizontally as it opens so the closed and fully open poses are both centered. The turning panel is a solid with rounded silver edges, a black bezel, and a front camera cutout.
 
-The key illusion is that the frame rotates in perspective while the photograph behaves like a flat image seen through a rotating window. Progressive blur, diagonal dark wedges, and angle-dependent reflections reconcile those two conflicting depth cues.
+The key illusion is that the frame rotates in perspective while the photograph behaves like a flat image seen through a rotating window. Progressive blur, diagonal dark wedges, and angle-dependent blur reconcile those two conflicting depth cues.
 
 ## Starting point
 
-This ports the current `DuoMedia.metal` implementation from SwiftLab after the rollback of the later edge-spreading blur, residual blur, fold-darkness and motion-smear additions. It retains the original projected crease easing and the newer layered glass reflections. Those reverted effects are deliberately absent.
+This ports the current `DuoMedia.metal` implementation from SwiftLab after the rollback of the later edge-spreading blur, residual blur, fold-darkness and motion-smear additions. It retains the original projected crease easing and now adds a tilt-dependent blur-end shift. Those reverted effects are deliberately absent.
 
-The web shader preserves the Swift defaults: 36-point progressive blur, 16-point diagonal blur, 45% crease blend width, easing exponent 1.5, 58% edge darkening, and 35% glass reflection. Web blur distances are expressed in CSS pixels, the logical-coordinate counterpart to SwiftUI points. Matching logical viewport and panel dimensions gives the closest comparison.
+The web shader preserves the Swift defaults: 36-point progressive blur, 16-point diagonal blur, 45% crease blend width, easing exponent 1.5, 58% edge darkening, and 65% blur-end shift. Web blur distances are expressed in CSS pixels, the logical-coordinate counterpart to SwiftUI points. Matching logical viewport and panel dimensions gives the closest comparison.
 
 ## Rendering architecture
 
@@ -60,15 +60,15 @@ The turning face's darkening follows the same local progression as the blur, wit
 
 `rightRevealShade` estimates coverage using the projected free edges of both faces of the thick slab. As coverage decreases, a quintic curve clears the stationary screen's dark overlay monotonically. There is no extra pulse or mid-animation darkness peak. The shading is fully clear when that screen is fully revealed at edge-on.
 
-## Dynamic glass and polished metal
+## Shifting the blur boundary when nearly edge-on
 
-`screenGlass` reflects the view vector around the turning face's normal. Two differently oriented analytic light bands create broad highlights with smaller bright cores. A restrained cool-to-warm environment tint changes across the reflected direction. A Fresnel-like term increases reflectance at grazing angles.
+The original sharp hinge can dominate the image as foreshortening compresses the whole visible face. `blurEndShift` moves the clear end of the gradient past that hinge by `amount × sin⁴(angle)`, in panel-width units. The quartic angular envelope starts gently, becomes strongest near edge-on, and returns to zero at both flat endpoints.
 
-A pose envelope, `1 − cos²(angle)`, makes the coating disappear at both flat endpoints. A hinge mask preserves the anchor, and the final reflection contribution is bounded so image detail remains visible. This runs after blur and darkening, but before the white image transition and physical camera cutout.
+Both factors that previously protected the hinge must move. The projected crease distance gains `shift × panelWidth`; the local blur ramp uses `clamp(x + shift)` instead of `x`. The diagonal blur uses the shifted coordinate as well. Merely increasing radius, or moving only one of the two masks, would leave an unblurred strip.
 
-A captured environment map could add more realistic surroundings, but would introduce an asset, texture samples and scene assumptions. The two procedural light sources give the moving-glass cue without those costs. This is stylized glass shading; it does not simulate refraction through a physical dielectric volume.
+The default shift amount is 0.65. Zero recovers the old blur profile. Maximum blur remains bounded by the existing blur radii, and no additional texture samples are needed. The dark-gradient and wedge-opacity coordinates are unchanged. WebGL and Metal use the same formula and uniform slot.
 
-The metallic rim uses a bright ambient floor, broad and narrow specular terms, and a grazing highlight. Its normal comes from the rounded solid, so the reflection follows the actual curved edge instead of a flat border gradient.
+The glass-reflection coating has been removed. Old versions ignore their reflection value and migrate to zero end shift; new saves record the shift. The polished rim still uses its rounded normal, bright ambient floor, broad and narrow highlights, and grazing response. Keeping the metal lighting preserves the hardware cue without overlaying reflections on the photo.
 
 ## Edge sampling and resource costs
 
@@ -90,4 +90,4 @@ A useful next comparison is to feed both implementations the same horizontal gri
 
 ## Reading path
 
-Start with `settings.ts` for the current editable values, then `renderer.ts` for resource lifetime and uniform mapping. In `duo.frag`, read `shadeDuo` and `panelColor` first. Follow with `foldColor`, `creaseBlurWeight`, `sampleFront`, and `screenGlass`. Read the slab-intersection and bevel functions last; they provide the geometry underlying those visual treatments.
+Start with `settings.ts` for the current editable values, then `renderer.ts` for resource lifetime and uniform mapping. In `duo.frag`, read `shadeDuo` and `panelColor` first. Follow with `foldColor`, `creaseBlurWeight`, and `sampleFront`. Read the slab-intersection and bevel functions last; they provide the geometry underlying those visual treatments.

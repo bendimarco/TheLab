@@ -1,5 +1,5 @@
 export const defaults = {
-  glassReflection: 0.35,
+  blurEndShift: 0.65,
   blurRadius: 36,
   diagonalBlurRadius: 16,
   creaseBlendWidth: 0.45,
@@ -8,7 +8,7 @@ export const defaults = {
 };
 export type Settings = typeof defaults;
 export const ranges: Record<keyof Settings, [number, number]> = {
-  glassReflection: [0, 1],
+  blurEndShift: [0, 1],
   blurRadius: [0, 80],
   diagonalBlurRadius: [0, 60],
   creaseBlendWidth: [0, 1],

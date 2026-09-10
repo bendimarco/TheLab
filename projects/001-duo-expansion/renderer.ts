@@ -179,7 +179,7 @@ export class DuoRenderer {
     uniform('frontProjection', [1, 1, s.blurRadius, 0.12]);
     uniform('frontEdge', [1.6, s.edgeDarkness, 0.18, 1.5]);
     uniform('frontCorner', [0.97, 1, 0.006, 0]);
-    uniform('frontBlur', [s.diagonalBlurRadius, 1, s.glassReflection, 0]);
+    uniform('frontBlur', [s.diagonalBlurRadius, 1, s.blurEndShift, 0]);
     uniform('creaseBlur', [s.creaseBlendWidth, s.creaseBlurEasing, 0, 0]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (this.animation) this.requestDraw();

@@ -79,3 +79,13 @@ test('fold easing has exact endpoints and remains monotonic', () => {
     previous = value;
   }
 });
+
+test('old reflection versions migrate to an unshifted blur boundary', () => {
+  const old = addVersion(emptyArchive(), defaults, 'old', '2026-09-10T12:00:00Z');
+  delete old.versions[0].settings.blurEndShift;
+  old.versions[0].settings.glassReflection = 0.9;
+  const migrated = parseArchive(JSON.stringify(old));
+  assert.equal(migrated.versions[0].settings.blurEndShift, 0);
+  assert.equal('glassReflection' in migrated.versions[0].settings, false);
+  assert.equal(migrated.versions[0].settings.blurRadius, defaults.blurRadius);
+});

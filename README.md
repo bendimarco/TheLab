@@ -17,7 +17,7 @@ Open the local URL printed by the server. `npm run build` creates the production
 
 - Drag left to open and right to close; the expansion slider and Closed / Front / Inside / Open presets let you inspect exact poses.
 - In landscape, tap the demo to animate between endpoints. Space also animates; arrow keys and Home / End work when the demo is focused.
-- Tune animation duration, glass reflection, progressive blur, diagonal blur, crease blend width, blur easing, and edge darkening.
+- Tune animation duration, blur end shift, progressive blur, diagonal blur, crease blend width, blur easing, and edge darkening.
 - Upload or drop landscape images. Select multiple images to enable shuffle. New images fade through white. Unsupported formats, portrait images, and oversized files leave the current image in place.
 - Save, rename, restore, and delete parameter versions. Names increment automatically and include save timestamps. These snapshots contain the six exposed shader settings, not image files, animation duration, or shader source.
 - Versions and animation duration stay in this browser's local storage. Clearing site data removes them. A local preview and the hosted site have separate storage.

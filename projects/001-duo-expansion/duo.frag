@@ -12,7 +12,7 @@ struct DuoUniforms {
     vec4 frontProjection; // enabled, perspective lock, blur radius (points), blur start
     vec4 frontEdge;       // blur exponent, dark amount, dark start, dark exponent
     vec4 frontCorner;     // dark amount, geometric reach, softness, onset (radians)
-    vec4 frontBlur;       // diagonal blur radius (points), inside enabled, glass reflection strength, reserved
+    vec4 frontBlur;       // diagonal blur radius (points), inside enabled, blur end shift, reserved
     vec4 creaseBlur; // projected blend width / panel width, easing exponent, reserved, reserved
 };
 // A rectangle with rounding only at its free edge. The hinge edge stays straight.
@@ -100,10 +100,16 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     // Front: build toward edge-on. Inside: unwind that envelope toward flat.
     float treatmentAngle = inside ? PI - angle : angle;
     float turn = smoothstep(onset, PI * 0.5, treatmentAngle);
-    float creaseWeight = creaseBlurWeight(abs(flatX - anchorX),
-        inside ? w - bezel : viewport.x, u.creaseBlur.x, u.creaseBlur.y);
+    // Move the clear boundary beyond the hinge as foreshortening compresses
+    // the panel. Shift both masks so neither can pin a sharp strip to the edge.
+    float tilt = sin(angle);
+    float endShift = saturate(u.frontBlur.z) * tilt * tilt * tilt * tilt;
+    float blurX = saturate(x + endShift);
+    float panelWidth = inside ? w - bezel : viewport.x;
+    float creaseWeight = creaseBlurWeight(abs(flatX - anchorX) + endShift * panelWidth,
+        panelWidth, u.creaseBlur.x, u.creaseBlur.y);
     float blur = max(0.0, u.frontProjection.z) * turn * creaseWeight *
-                 edgeRamp(x, u.frontProjection.w, u.frontEdge.x);
+                 edgeRamp(blurX, u.frontProjection.w, u.frontEdge.x);
     float dark = saturate(u.frontEdge.y) * turn *
                  edgeRamp(x, u.frontEdge.z, u.frontEdge.w);
     // At reach=1 the inner edge of either wedge projects to a horizontal line.
@@ -112,8 +118,9 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     float hingeProtection = smoothstep(0.0, 0.025, x);
     // A second blur grows toward the two wedges, as well as toward the free edge
     // and with rotation. Its band extends inward from the geometric wedge boundary.
+    float blurHingeProtection = smoothstep(0.0, 0.025, blurX);
     float diagonalRadius = u.frontCorner.y > 0.0
-        ? max(0.0, u.frontBlur.x) * turn * x * hingeProtection * creaseWeight : 0.0;
+        ? max(0.0, u.frontBlur.x) * turn * blurX * blurHingeProtection * creaseWeight : 0.0;
     float distanceInsideImage = max(0.0, min(localUV.y, 1.0 - localUV.y) - depth) * viewport.y;
     float diagonalMask = 1.0 - smoothstep(0.0, max(1.0, diagonalRadius * 3.0), distanceInsideImage);
     float diagonalBlur = diagonalRadius * diagonalMask;
@@ -148,46 +155,6 @@ float rightRevealShade(float angle, float w, float h, float strength) {
     return 1.0 - saturate(strength) * (1.0 - saturate(clearAmount));
 }
 
-// Analytic studio-light reflections on the turning glass: no extra samples or
-// passes. Reflected view direction supplies spatial motion as the panel rotates.
-vec3 screenGlass(vec3 color, vec2 p, float w, float h, float angle,
-                   bool cover, bool left, float strength) {
-    if ((!cover && !left) || strength <= 0.0) return color;
-    float c = cos(angle), s = sin(angle);
-    float faceZ = cover ? h * 0.026 : 0.0;
-    vec3 worldPoint = vec3(c * p.x - s * faceZ, p.y - h * 0.5,
-                               s * p.x + c * faceZ);
-    vec3 normal = cover ? vec3(-s, 0.0, c) : vec3(s, 0.0, -c);
-    vec3 view = normalize(vec3(0.0, 0.0, h * 3.5) - worldPoint);
-    vec3 reflected = reflect(-view, normal);
-    float grazing = 1.0 - saturate(dot(normal, view));
-    float g2 = grazing * grazing;
-    float fresnel = 0.04 + 0.96 * g2 * g2 * grazing;
-
-    // Two differently oriented soft lights create layered traveling reflections.
-    float primaryDistance = abs(dot(reflected, vec3(0.75, 0.20, 0.55)) + 0.65);
-    float softbox = 1.0 - smoothstep(0.06, 0.26, primaryDistance);
-    float primaryCore = 1.0 - smoothstep(0.025, 0.08, primaryDistance);
-    float secondaryDistance = abs(dot(reflected, vec3(-0.30, -0.45, 0.80)) + 0.20);
-    float secondary = 1.0 - smoothstep(0.025, 0.12, secondaryDistance);
-    float lights = saturate(0.65 * softbox + 0.25 * primaryCore + 0.55 * secondary);
-
-    // A restrained cool/warm environment gradient gives the coating depth without
-    // noise, animated shimmer, or altering source texture coordinates.
-    float warmth = smoothstep(-0.25, 0.35, reflected.y + 0.20 * reflected.x);
-    vec3 environment = mix(vec3(0.78, 0.88, 1.0), vec3(1.0, 0.93, 0.82), warmth);
-    environment = mix(environment, vec3(1.0), lights * 0.8);
-    float bezel = h * 0.028;
-    float x = saturate((p.x - (cover ? bezel : 0.0)) / (w - (cover ? 2.0 : 1.0) * bezel));
-    float hingeMask = smoothstep(0.0, 0.08, x);
-    float edgeCatch = x * x * x * x * fresnel;
-    // Exact flat endpoints stay clear; the bounded coat preserves photo detail.
-    float poseWeight = max(0.0, 1.0 - c * c);
-    float reflection = min(0.68, saturate(strength) * poseWeight * hingeMask *
-        (0.12 + 0.40 * fresnel + 0.90 * lights + 0.18 * edgeCatch));
-    return mix(color, environment, reflection);
-}
-
 // Hardware detail follows the physical front glass, independently of photo
 // projection, blur, and white transitions. The inside face has no camera cutout.
 vec3 frontCamera(vec3 color, vec2 p, float w, float h, bool cover) {
@@ -216,7 +183,6 @@ vec3 panelColor(vec2 p, float w, float h, bool cover, bool left,
 
     if ((cover && u.frontProjection.x > 0.5) || (!cover && left && u.frontBlur.y > 0.5)) {
         vec3 color = foldColor(p, w, h, angle, !cover, photo, u);
-        color = screenGlass(color, p, w, h, angle, cover, left, u.frontBlur.z);
         return frontCamera(mix(color, vec3(1.0), saturate(u.media.z)), p, w, h, cover);
     }
 
@@ -236,7 +202,7 @@ vec3 panelColor(vec2 p, float w, float h, bool cover, bool left,
     // Retain the old inside lighting only for snapshots predating the inside effect.
     float shade = left ? 1.0 - 0.23 * sin(angle) : 1.0;
     if (!cover && !left) shade = rightRevealShade(angle, w, h, u.frontEdge.y);
-    color = screenGlass(color * shade, p, w, h, angle, cover, left, u.frontBlur.z);
+    color *= shade;
     return frontCamera(mix(color, vec3(1.0), clamp(u.media.z, 0.0, 1.0)), p, w, h, cover);
 }
 
