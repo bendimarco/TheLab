@@ -17,13 +17,15 @@ Open the local URL printed by the server. `npm run build` creates the production
 
 - Drag left to open and right to close; the expansion slider and Closed / Front / Inside / Open presets let you inspect exact poses.
 - In landscape, tap the demo to animate between endpoints. Space also animates; arrow keys and Home / End work when the demo is focused.
-- Tune animation duration, blur end shift, progressive blur, diagonal blur, crease blend width, blur easing, and edge darkening.
+- Tune animation duration, progressive blur, diagonal blur, crease blend width, blur easing, and edge darkening.
 - Upload or drop landscape images. Select multiple images to enable shuffle. New images fade through white. Unsupported formats, portrait images, and oversized files leave the current image in place.
-- Save, rename, restore, and delete parameter versions. Names increment automatically and include save timestamps. These snapshots contain the six exposed shader settings, not image files, animation duration, or shader source.
+- Save, rename, restore, and delete parameter versions. Names increment automatically and include save timestamps. These snapshots contain the five exposed shader settings, not image files, animation duration, or shader source.
 - Versions and animation duration stay in this browser's local storage. Clearing site data removes them. A local preview and the hosted site have separate storage.
 - Image decoding and rendering happen on your device. Images are not uploaded to a server or added to this repository. Refreshing returns to the bundled sample; choose your images again.
 
 The controls dock below the demo rather than covering it. Use the handle to hide or reopen them. Browser CSS approximates the native translucent controls; it does not use Apple's Liquid Glass APIs.
+
+Blur end shift is fixed at 30% in both renderers; saved versions cannot override it.
 
 ## Source map
 
@@ -48,7 +50,7 @@ npm run build
 
 Lint covers owned application code; generated component-library sources are kept intact. Tests cover local archive integrity, parameter validation, snapshot independence, numbering and fold easing. The shader passed native OpenGL compilation and subsequently compiled and linked in the in-app WebGL 2 browser after fixing GLSL ES numeric conversions. These are compilation checks, not a cross-browser GPU compatibility or frame-rate benchmark. Interactive browser QA and real mobile-device performance profiling have not been performed.
 
-An optional, feature-detected WebMCP `configure_duo` tool exposes expansion and the same six shader settings. It never changes images or saves versions. Its registration, valid parameter updates, and rejection of out-of-range values were checked in the in-app browser.
+An optional, feature-detected WebMCP `configure_duo` tool exposes expansion and the same five shader settings. It never changes images or saves versions. Its registration, valid parameter updates, and rejection of out-of-range values were checked in the in-app browser.
 
 ## Sample image
 

@@ -8,7 +8,7 @@ The key illusion is that the frame rotates in perspective while the photograph b
 
 This ports the current `DuoMedia.metal` implementation from SwiftLab after the rollback of the later edge-spreading blur, residual blur, fold-darkness and motion-smear additions. It retains the original projected crease easing and now adds a tilt-dependent blur-end shift. Those reverted effects are deliberately absent.
 
-The web shader preserves the Swift defaults: 36-point progressive blur, 16-point diagonal blur, 45% crease blend width, easing exponent 1.5, 58% edge darkening, and 65% blur-end shift. Web blur distances are expressed in CSS pixels, the logical-coordinate counterpart to SwiftUI points. Matching logical viewport and panel dimensions gives the closest comparison.
+The web shader preserves the Swift defaults: 36-point progressive blur, 16-point diagonal blur, 45% crease blend width, easing exponent 1.5, 58% edge darkening, and a fixed 30% blur-end shift. Web blur distances are expressed in CSS pixels, the logical-coordinate counterpart to SwiftUI points. Matching logical viewport and panel dimensions gives the closest comparison.
 
 ## Rendering architecture
 
@@ -16,7 +16,7 @@ The web shader preserves the Swift defaults: 36-point progressive blur, 16-point
 
 A mesh renderer with Three.js would be a reasonable alternative for a larger 3D scene. Here, the Metal implementation already solved visibility, bevels, image projection, and sampling analytically. Retaining that math avoids introducing a second geometry representation and makes the two implementations easier to compare. The tradeoff is that procedural geometry consumes fragment work, especially around the rounded rim.
 
-The nine Metal `float4` uniform groups become GLSL `vec4` members on a uniform struct. GLSL ES requires explicit floating-point operands: expressions such as `2 * bezel` must become `2.0 * bezel`. The desktop GLSL compiler accepted the original numeric conversions, but the actual WebGL compiler rejected them. Checking the browser compiler therefore caught a portability issue that the native compile check could not. Video-orientation matrices are identity in this image-only port: the browser decodes orientation before the texture is created. Changes to the six exposed shader values alter uniforms without recompiling the program.
+The nine Metal `float4` uniform groups become GLSL `vec4` members on a uniform struct. GLSL ES requires explicit floating-point operands: expressions such as `2 * bezel` must become `2.0 * bezel`. The desktop GLSL compiler accepted the original numeric conversions, but the actual WebGL compiler rejected them. Checking the browser compiler therefore caught a portability issue that the native compile check could not. Video-orientation matrices are identity in this image-only port: the browser decodes orientation before the texture is created. Changes to the five exposed shader values alter uniforms without recompiling the program.
 
 ## Hinge geometry and centering
 
@@ -66,9 +66,9 @@ The original sharp hinge can dominate the image as foreshortening compresses the
 
 Both factors that previously protected the hinge must move. The projected crease distance gains `shift × panelWidth`; the local blur ramp uses `clamp(x + shift)` instead of `x`. The diagonal blur uses the shifted coordinate as well. Merely increasing radius, or moving only one of the two masks, would leave an unblurred strip.
 
-The default shift amount is 0.65. Zero recovers the old blur profile. Maximum blur remains bounded by the existing blur radii, and no additional texture samples are needed. The dark-gradient and wedge-opacity coordinates are unchanged. WebGL and Metal use the same formula and uniform slot.
+The shift amount is fixed at 0.30. Saved versions cannot override it. Maximum blur remains bounded by the existing blur radii, and no additional texture samples are needed. The dark-gradient and wedge-opacity coordinates are unchanged. WebGL and Metal use the same formula and uniform slot.
 
-The glass-reflection coating has been removed. Old versions ignore their reflection value and migrate to zero end shift; new saves record the shift. The polished rim still uses its rounded normal, bright ambient floor, broad and narrow highlights, and grazing response. Keeping the metal lighting preserves the hardware cue without overlaying reflections on the photo.
+The glass-reflection coating has been removed. Old versions ignore both their reflection and end-shift values; the renderer always supplies a 0.30 shift. The polished rim still uses its rounded normal, bright ambient floor, broad and narrow highlights, and grazing response. Keeping the metal lighting preserves the hardware cue without overlaying reflections on the photo.
 
 ## Edge sampling and resource costs
 

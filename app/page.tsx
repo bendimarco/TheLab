@@ -627,15 +627,6 @@ export default function Home() {
               }}
             />
             <Range
-              label="Blur end shift"
-              value={settings.blurEndShift}
-              max={1}
-              format={percent}
-              onChange={(n) =>
-                applySettings({ ...settingsRef.current, blurEndShift: n })
-              }
-            />
-            <Range
               label="Progressive blur"
               value={settings.blurRadius}
               max={80}

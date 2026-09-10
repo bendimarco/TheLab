@@ -34,7 +34,8 @@ export function parseArchive(raw: string | null): Archive {
     if (v?.settings && typeof v.settings === 'object') {
       const settings = { ...v.settings };
       delete settings.glassReflection;
-      v.settings = { ...settings, blurEndShift: settings.blurEndShift ?? 0 };
+      delete settings.blurEndShift;
+      v.settings = settings;
     }
     if (
       typeof v.id !== 'string' ||
