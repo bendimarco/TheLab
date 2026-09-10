@@ -19,9 +19,9 @@ Open the local URL printed by the server. `npm run build` creates the production
 - In landscape, tap the demo to animate between endpoints. Space also animates; arrow keys and Home / End work when the demo is focused.
 - Tune animation duration, progressive blur, diagonal blur, crease blend width, blur easing, and edge darkening.
 - Upload or drop landscape images. Select multiple images to enable shuffle. New images fade through white. Unsupported formats, portrait images, and oversized files leave the current image in place.
-- Save, rename, restore, and delete parameter versions. Names increment automatically and include save timestamps. These snapshots contain the five exposed shader settings, not image files, animation duration, or shader source.
+- Save, rename, restore, and delete parameter versions. Names increment automatically and include save timestamps. These snapshots contain the exposed shader settings, not image files, animation duration, or shader source.
 - Versions and animation duration stay in this browser's local storage. Clearing site data removes them. A local preview and the hosted site have separate storage.
-- Image decoding and rendering happen on your device. Images are not uploaded to a server or added to this repository. Refreshing returns to the bundled sample; choose your images again.
+- Image decoding and rendering happen on your device. Visitor uploads are not sent to a server or added to this repository. The Italy sample collection is bundled publicly. Refreshing returns to the bundled sample; choose your images again.
 
 The controls start hidden. Use the sliders icon to open the floating right-side inspector, and its close button, the same icon, or Escape to dismiss it. The panel has a 12 px inset and rounded corners; the demo moves into the remaining space while it slides in. The inspector is nonmodal so the demo remains interactive. Browser CSS approximates the native translucent controls; it does not use Apple's Liquid Glass APIs.
 
@@ -50,11 +50,13 @@ npm run build
 
 Lint covers owned application code; generated component-library sources are kept intact. Tests cover local archive integrity, parameter validation, snapshot independence, numbering and fold easing. The shader passed native OpenGL compilation and subsequently compiled and linked in the in-app WebGL 2 browser after fixing GLSL ES numeric conversions. These are compilation checks, not a cross-browser GPU compatibility or frame-rate benchmark. Interactive browser QA and real mobile-device performance profiling have not been performed.
 
-An optional, feature-detected WebMCP `configure_duo` tool exposes expansion and the same five shader settings. It never changes images or saves versions. Its registration, valid parameter updates, and rejection of out-of-range values were checked in the in-app browser.
+An optional, feature-detected WebMCP `configure_duo` tool exposes expansion and the same shader settings. It never changes images or saves versions. Its registration, valid parameter updates, and rejection of out-of-range values were checked in the in-app browser.
 
 ## Sample image
 
-The included Mars dune photograph is NASA/JPL-Caltech/University of Arizona, [PIA15283](https://science.nasa.gov/photojournal/dunes-in-noachis-terra-region-of-mars/), carried over from SwiftLab. The project contains no personal camera-roll photos.
+The public Italy collection contains four photos supplied by Ben DiMarco. `P1001163.JPG` is the default. Pick a thumbnail in the controls or use Shuffle to explore the collection. Uploading your own photos switches shuffle to your selected files; choosing an Italy thumbnail switches it back. Every switch keeps the existing fade through white.
+
+Files live in `public/photos/italy/`. Add a landscape JPEG (up to 2048 px wide) and a 360 px thumbnail named `<id>-thumb.jpg`, then add the ID and label to `projects/001-duo-expansion/samples.ts`. The first entry is the default. Exported copies use JPEG compression and omit EXIF metadata; originals are unchanged. Only the selected full-size photo is decoded, and thumbnail loading is deferred.
 
 The Blur curve editor has two vertical handles: drag with a mouse or touch, or focus a handle and use Up/Down (Shift for larger steps). Reset restores the progressive default; saved versions include the curve. These controls are available to every visitor who can access the site and affect only their own session.
 

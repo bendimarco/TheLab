@@ -368,3 +368,43 @@ canvas:focus-visible {
   color: #666;
   margin-bottom: 8px;
 }
+
+.sample-collection {
+  margin-top: 20px;
+}
+.sample-collection h2 {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0 0 12px;
+}
+.sample-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.sample-photo {
+  padding: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  background: #ddd;
+}
+.sample-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+}
+.sample-photo[aria-pressed='true'] {
+  border-color: #007aff;
+}
+.sample-photo:focus-visible {
+  outline: 2px solid #007aff;
+  outline-offset: 3px;
+}
+.sample-photo:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

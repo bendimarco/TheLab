@@ -27,6 +27,10 @@ import {
   ranges,
   type Settings,
 } from '@/projects/001-duo-expansion/settings';
+import {
+  defaultPhoto,
+  samplePhotos,
+} from '@/projects/001-duo-expansion/samples';
 import { decodeImage, decodeURL } from '@/projects/001-duo-expansion/media';
 import {
   addVersion,
@@ -114,6 +118,7 @@ export default function Home() {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [fileCount, setFileCount] = useState(0);
+  const [selectedSample, setSelectedSample] = useState<number | null>(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [archive, setArchive] = useState<Archive>(emptyArchive);
@@ -185,7 +190,7 @@ export default function Home() {
     );
     observer.observe(el);
     const job = ++mediaJob.current;
-    void decodeURL('/sample.jpg')
+    void decodeURL(defaultPhoto.src)
       .then((image) => {
         if (!alive.current || mediaJob.current !== job) return;
         currentImage.current = image;
@@ -326,7 +331,7 @@ export default function Home() {
       );
     }
   }
-  async function changeImage(file?: File) {
+  async function changeImage(source: File | string = defaultPhoto.src) {
     const job = ++mediaJob.current;
     setBusy(true);
     setError('');
@@ -337,9 +342,10 @@ export default function Home() {
       renderer.current.requestDraw();
     }
     try {
-      const image = file
-        ? await decodeImage(file)
-        : await decodeURL('/sample.jpg');
+      const image =
+        typeof source === 'string'
+          ? await decodeURL(source)
+          : await decodeImage(source);
       if (!alive.current || job !== mediaJob.current) return false;
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (reduced) {
@@ -386,6 +392,7 @@ export default function Home() {
   async function upload(files: File[]) {
     if (!files.length || busy) return;
     if (await changeImage(files[0])) {
+      setSelectedSample(null);
       imageFiles.current = files;
       imageIndex.current = 0;
       setFileCount(files.length);
@@ -396,7 +403,28 @@ export default function Home() {
       );
     }
   }
+  async function chooseSample(index: number) {
+    if (busy) return;
+    if (await changeImage(samplePhotos[index].src)) {
+      imageFiles.current = [];
+      imageIndex.current = -1;
+      setFileCount(0);
+      setSelectedSample(index);
+      setStatus(samplePhotos[index].label);
+    }
+  }
   async function shuffle() {
+    if (busy) return;
+    if (selectedSample !== null) {
+      if (samplePhotos.length < 2) return;
+      const next =
+        (selectedSample +
+          1 +
+          Math.floor(Math.random() * (samplePhotos.length - 1))) %
+        samplePhotos.length;
+      await chooseSample(next);
+      return;
+    }
     const files = imageFiles.current;
     if (files.length < 2 || busy) return;
     const next =
@@ -502,7 +530,9 @@ export default function Home() {
               {renderError}
             </p>
           )}
-          {fileCount > 1 && (
+          {(selectedSample !== null
+            ? samplePhotos.length > 1
+            : fileCount > 1) && (
             <button
               className="glass shuffle"
               aria-label="Shuffle images"
@@ -769,20 +799,42 @@ export default function Home() {
               <button
                 className="text-button"
                 disabled={busy}
-                onClick={async () => {
-                  if (await changeImage()) {
-                    imageFiles.current = [];
-                    imageIndex.current = -1;
-                    setFileCount(0);
-                    setStatus('Sample image restored.');
-                  }
-                }}
+                onClick={() => void chooseSample(0)}
               >
                 Use sample photo
               </button>
             </div>
+            <section
+              className="sample-collection"
+              aria-labelledby="italy-photos-title"
+            >
+              <h2 id="italy-photos-title">Italy</h2>
+              <div className="sample-grid">
+                {samplePhotos.map((photo, index) => (
+                  <button
+                    key={photo.id}
+                    className="sample-photo"
+                    disabled={busy}
+                    aria-label={`Try ${photo.label}`}
+                    aria-pressed={selectedSample === index}
+                    title={photo.label}
+                    onClick={() => void chooseSample(index)}
+                  >
+                    {/* These are pre-sized static thumbnails; no image server is needed. */}
+                    {/* eslint-disable-next-line nextjs/no-img-element */}
+                    <img
+                      src={photo.thumbnail}
+                      alt=""
+                      width={360}
+                      height={240}
+                      loading="lazy"
+                    />
+                  </button>
+                ))}
+              </div>
+            </section>
             <div className="footer">
-              <span className="hint">Images stay on your device.</span>
+              <span className="hint">Your uploads stay on your device.</span>
             </div>
           </div>
         </SheetContent>
