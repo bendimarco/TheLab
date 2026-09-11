@@ -16,7 +16,7 @@ float saturate(float x) { return clamp(x, 0.0, 1.0); }
 
 struct DuoUniforms {
     vec4 geometry; // viewport width/height in points, panel height, progress
-    vec4 media;    // upright media width/height, white transition amount
+    vec4 media;    // upright media width/height, white transition amount, aligned front crop
     vec4 raster;   // drawable width/height for pixel-sized reconstruction
     vec4 uvX;     // upright UV -> encoded texture UV (video orientation)
     vec4 uvY;
@@ -124,6 +124,13 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     vec2 imageViewport = inside ? vec2(2.0 * w - 2.0 * bezel, viewport.y) : viewport;
     vec2 imagePosition = inside ? vec2(w - imagePoint.x - bezel, imagePoint.y - bezel)
                                   : imagePoint - bezel;
+    if (!inside && u.media.w > 0.5) {
+        // Match the exact visible crop of the stationary right screen. The cover
+        // has a hinge bezel; normalize its narrower aperture to that whole crop.
+        float rightWidth = w - bezel;
+        imagePosition.x = rightWidth + (imagePoint.x - bezel) / viewport.x * rightWidth;
+        imageViewport.x = 2.0 * rightWidth;
+    }
     float onset = clamp(u.frontCorner.w, 0.0, PI / 3.0);
     // Front: build toward edge-on. Inside: unwind that envelope toward flat.
     float treatmentAngle = inside ? PI - angle : angle;

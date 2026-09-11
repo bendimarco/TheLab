@@ -195,7 +195,7 @@ export class DuoRenderer {
       Math.min((this.width - 48) / 1.44, (this.height - 40) / 1.26),
     );
     uniform('geometry', [this.width, this.height, h, this.progress]);
-    uniform('media', [...this.mediaSize, this.white, 0]);
+    uniform('media', [...this.mediaSize, this.white, s.closedImageAligned]);
     uniform('raster', [this.canvas.width, this.canvas.height, 0, 0]);
     uniform('uvX', [1, 0, 0, 0]);
     uniform('uvY', [0, 1, 0, 0]);

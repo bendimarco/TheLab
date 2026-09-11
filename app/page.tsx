@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import {
   Sheet,
   SheetTrigger,
@@ -247,7 +248,12 @@ export default function Home() {
           ...Object.fromEntries(
             Object.entries(ranges).map(([k, [min, max]]) => [
               k,
-              { type: 'number', minimum: min, maximum: max },
+              {
+                type: 'number',
+                minimum: min,
+                maximum: max,
+                ...(k === 'closedImageAligned' ? { enum: [0, 1] } : {}),
+              },
             ]),
           ),
         },
@@ -268,7 +274,8 @@ export default function Home() {
             typeof value !== 'number' ||
             !Number.isFinite(value) ||
             value < range[0] ||
-            value > range[1]
+            value > range[1] ||
+            (key === 'closedImageAligned' && value !== 0 && value !== 1)
           )
             throw new Error(`Invalid parameter: ${key}`);
           if (key !== 'expansion') next[key as keyof Settings] = value;
@@ -787,6 +794,28 @@ export default function Home() {
                   })
                 }
               />
+              <div className="range">
+                <div className="range-label">
+                  <label htmlFor="closed-image-alignment">
+                    Left-aligned closed image
+                  </label>
+                  <Switch
+                    id="closed-image-alignment"
+                    checked={settings.closedImageAligned === 1}
+                    onCheckedChange={(checked) =>
+                      applySettings({
+                        ...settingsRef.current,
+                        closedImageAligned: checked ? 1 : 0,
+                      })
+                    }
+                  />
+                </div>
+                <p className="hint">
+                  {settings.closedImageAligned === 1
+                    ? 'Matches the image on the open right screen.'
+                    : 'Centers the image on the closed screen.'}
+                </p>
+              </div>
             </div>
             <p className="hint">
               Drag to fold. Tap in landscape to open or close.

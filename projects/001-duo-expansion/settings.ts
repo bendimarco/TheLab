@@ -5,6 +5,7 @@ export const defaults = {
   creaseBlurEasing: 3.1,
   edgeDarkness: 0.55,
   rightScreenDarkness: 0.44,
+  closedImageAligned: 0,
   blurCurveStartX: 1,
   blurCurveEndX: 1,
   blurCurveStart: 0,
@@ -18,6 +19,7 @@ export const ranges: Record<keyof Settings, [number, number]> = {
   creaseBlurEasing: [1, 4],
   edgeDarkness: [0, 1],
   rightScreenDarkness: [0, 1],
+  closedImageAligned: [0, 1],
   blurCurveStartX: [0, 1],
   blurCurveEndX: [0, 1],
   blurCurveStart: [0, 1],
@@ -27,6 +29,7 @@ export function validSettings(value: unknown): value is Settings {
   if (!value || typeof value !== 'object') return false;
   return Object.entries(ranges).every(([key, [min, max]]) => {
     const n = (value as Record<string, unknown>)[key];
+    if (key === 'closedImageAligned') return n === 0 || n === 1;
     return typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max;
   });
 }

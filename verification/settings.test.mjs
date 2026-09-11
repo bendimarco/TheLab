@@ -218,6 +218,7 @@ test('new sessions start with the exact captured tuning and curve', () => {
     creaseBlurEasing: 3.1,
     edgeDarkness: 0.55,
     rightScreenDarkness: 0.44,
+    closedImageAligned: 0,
     blurCurveStartX: 1,
     blurCurveEndX: 1,
     blurCurveStart: 0,
@@ -356,4 +357,26 @@ test('image decoding centers portrait/square crops and retains landscape framing
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
   }
+});
+
+test('closed-image alignment persists and older versions remain centered', () => {
+  const old = addVersion(
+    emptyArchive(),
+    defaults,
+    'alignment',
+    '2026-09-11T00:00:00Z',
+  );
+  delete old.versions[0].settings.closedImageAligned;
+  assert.equal(
+    parseArchive(JSON.stringify(old)).versions[0].settings.closedImageAligned,
+    0,
+  );
+  const aligned = addVersion(
+    emptyArchive(),
+    { ...defaults, closedImageAligned: 1 },
+    'aligned',
+    '2026-09-11T00:00:00Z',
+  );
+  assert.deepEqual(parseArchive(JSON.stringify(aligned)), aligned);
+  assert.equal(validSettings({ ...defaults, closedImageAligned: 0.5 }), false);
 });

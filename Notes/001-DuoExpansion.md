@@ -133,3 +133,10 @@ The 64 cases passed. Offscreen full-phone renders with the sample photograph wer
 ### Portrait input framing
 
 After browser decoding applies image orientation, portrait and square inputs are cropped around their center to 3:2, matching the sample collection. The full source width is retained; crop height is width / 1.5 and the vertical origin is (source height − crop height) / 2. The crop is then downsampled to at most 2048 pixels on its longest edge. Landscape sources keep their existing aspect ratio. This preprocessing happens once per image, so the shader sees the same landscape texture shape it already supports, without per-frame crop work. The tradeoff is loss of the top and bottom of portrait compositions; there is no stretching or automatic subject detection. Uploaded originals remain local and unchanged.
+
+
+### Optional matching front crop
+
+The cover normally uses a centered aspect-fill crop. With `closedImageAligned` enabled, it samples the same source region as the stationary right screen in the fully opened state. This is the requested “left-aligned” mode: matching content, not mirroring the photo or aligning it to the source image's left edge.
+
+The right screen's visible aperture has width `w − bezel`; the cover has bezels on both sides and is narrower, `w − 2 × bezel`. Normalize the cover coordinate across that aperture, then map it into the right half of the full virtual image: `rightWidth + (imagePoint.x − bezel) / coverWidth × rightWidth`. Both modes keep the same vertical coordinates and perspective lock. This gives the same normalized crop despite the small physical aperture difference. The inside face and stationary screen are unaffected. The mode uses a spare media uniform component, adds no texture reads, and is stored with versions. Older versions default to centered.
