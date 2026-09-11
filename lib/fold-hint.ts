@@ -29,7 +29,7 @@ export function createFoldHint(options: {
       active = true;
       hintTimer = setTimeout(() => {
         if (active && !destroyed) show(true);
-      }, 3000);
+      }, 1000);
       nudgeTimer = setInterval(() => {
         if (!active || destroyed) return;
         cancelNudge?.();

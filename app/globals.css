@@ -787,8 +787,8 @@ canvas:focus-visible {
 
 .fold-hint {
   position: absolute;
-  right: clamp(12px, 4vw, 56px);
-  top: calc(50% - 44px);
+  left: var(--hint-left, 75%);
+  top: var(--hint-top, 50%);
   display: flex;
   align-items: center;
   gap: 7px;
@@ -816,7 +816,6 @@ canvas:focus-visible {
 }
 @media (max-width: 500px) {
   .fold-hint {
-    right: 8px;
     font-size: 11px;
   }
 }

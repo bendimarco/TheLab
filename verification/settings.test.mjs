@@ -612,11 +612,11 @@ test('fold guidance waits for idle, stops after interaction, and restarts on a f
     const hint = createFoldHint(options);
     hint.resume();
     hint.resume();
-    advance(2999);
+    advance(999);
     assert.deepEqual(visibility, []);
     advance(1);
     assert.deepEqual(visibility, [true]);
-    advance(1000);
+    advance(3000);
     assert.equal(nudges, 1);
     advance(4000);
     assert.equal(nudges, 2);
@@ -626,7 +626,7 @@ test('fold guidance waits for idle, stops after interaction, and restarts on a f
     advance(12000);
     assert.equal(nudges, 2);
     hint.resume();
-    advance(3000);
+    advance(1000);
     assert.equal(visibility.at(-1), true);
     hint.complete();
     hint.complete();
@@ -637,11 +637,11 @@ test('fold guidance waits for idle, stops after interaction, and restarts on a f
     hint.destroy();
     const nextVisit = createFoldHint(options);
     nextVisit.resume();
-    advance(2999);
+    advance(999);
     assert.equal(visibility.at(-1), false);
     advance(1);
     assert.equal(visibility.at(-1), true);
-    advance(1000);
+    advance(3000);
     assert.equal(nudges, 3);
     nextVisit.complete();
     nextVisit.resume();

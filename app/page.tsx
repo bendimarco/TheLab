@@ -414,11 +414,20 @@ export default function Home() {
       }
     };
     initialize();
+    const resizeDemo = (width: number, height: number) => {
+      renderer.current?.resize(width, height);
+      // Match the renderer's closed cover size and perspective projection.
+      const phoneHeight = Math.max(
+        1,
+        0.98 * Math.min((width - 48) / 1.44, (height - 40) / 1.26),
+      );
+      const rightEdge = width / 2 + (phoneHeight * 0.36 * 3.5) / (3.5 - 0.026);
+      el.parentElement?.style.setProperty('--hint-left', `${rightEdge + 12}px`);
+      el.parentElement?.style.setProperty('--hint-top', `${height / 2}px`);
+    };
+    resizeDemo(el.clientWidth, el.clientHeight);
     const observer = new ResizeObserver(([entry]) =>
-      renderer.current?.resize(
-        entry.contentRect.width,
-        entry.contentRect.height,
-      ),
+      resizeDemo(entry.contentRect.width, entry.contentRect.height),
     );
     observer.observe(el);
     // Reserve the actual toolbar height, including wrapped rows on narrow screens.
