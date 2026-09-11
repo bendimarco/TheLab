@@ -10,7 +10,6 @@ import {
 import {
   Plus,
   Play,
-  Pause,
   History,
   Trash2,
   Upload,
@@ -1255,9 +1254,25 @@ export default function Home() {
               }}
             >
               {videoNeedsPlay || videoPaused || videoState.paused ? (
-                <Play size={15} fill="currentColor" strokeWidth={1.5} />
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M4 2 14 8 4 14Z" />
+                </svg>
               ) : (
-                <Pause size={15} fill="currentColor" strokeWidth={1.5} />
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M3 2h4v12H3zM9 2h4v12H9z" />
+                </svg>
               )}
             </button>
             <button
@@ -1315,8 +1330,10 @@ export default function Home() {
                 disabled={!videoState.duration || busy}
                 onChange={(e) => {
                   const time = Number(e.target.value);
+                  setVideoPaused(true);
+                  currentMedia.current?.setPaused(true);
                   currentMedia.current?.seek?.(time);
-                  setVideoState((state) => ({ ...state, time }));
+                  setVideoState((state) => ({ ...state, time, paused: true }));
                 }}
               />
             </div>
