@@ -979,18 +979,17 @@ canvas:focus-visible {
   transform: translateX(-50%);
   background: linear-gradient(
     to bottom,
-    #686872 0 var(--watched),
-    #d3d3d8 var(--watched) 100%
+    #85858d 0 var(--watched),
+    #e1e1e6 var(--watched) 100%
   );
 }
 .video-scrub-head {
   position: absolute;
   left: 50%;
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: #fff;
-  border: 1px solid #73737d;
+  background: #85858f;
   opacity: var(--proximity);
   transform: translate(-50%, -50%) scale(var(--proximity));
   transition:
