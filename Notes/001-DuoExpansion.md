@@ -202,3 +202,9 @@ The regular 5×5 gather could expose a square sampling pattern at large radii, c
 Captured the live local settings: progressive blur 75, diagonal blur 65, crease blend 0, crease easing 3.1, right-screen darkness 0.44, centered cover, and curve handles (1, 0), (1, 0.4869037828947368). Edge darkness defaults to strength 1 and now accepts up to 2; clamping happens after the angular/spatial weighting so the extended range has an effect without negative colors.
 
 The shell is now 0.034 times phone height (previously 0.026), with a 0.007-height silver overlap at the glass lip. Grazing corner refinement falls back to the analytic metal shell on non-convergence instead of exposing black surfaces through a missing intersection. A narrower, brighter highlight strengthens the polished metal appearance while retaining the bright ambient floor.
+
+Right-screen darkness now defaults to 0.5. The existing internal crease exponent is retained for saved-version compatibility; it has no effect when crease blend width is zero.
+
+### Corner intersection correction
+
+The corner-cylinder intersection now uses the closest-approach form instead of subtracting large nearly equal squared terms in the quadratic discriminant. Analytic candidates must also be entry-facing; an exit surface must not substitute for a missed front intersection. The rim returns to 0.026-height thickness, the silver overlap reduces to 0.002, and the black bezel increases to 0.034. This addresses intersection stability rather than broadening the silver mask.

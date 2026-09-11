@@ -188,7 +188,7 @@ export default function Home() {
   const [settings, setSettings] = useState<Settings>({ ...defaults });
   const [progress, setProgress] = useState(0);
   const [preciseDragging, setPreciseDragging] = useState(false);
-  const [duration, setDuration] = useState(1.2);
+  const [duration, setDuration] = useState(1.9);
   const [error, setError] = useState('');
   const [videoNeedsPlay, setVideoNeedsPlay] = useState(false);
   const [renderError, setRenderError] = useState('');
@@ -421,7 +421,7 @@ export default function Home() {
         1,
         0.98 * Math.min((width - 48) / 1.44, (height - 40) / 1.26),
       );
-      const rightEdge = width / 2 + (phoneHeight * 0.36 * 3.5) / (3.5 - 0.034);
+      const rightEdge = width / 2 + (phoneHeight * 0.36 * 3.5) / (3.5 - 0.026);
       el.parentElement?.style.setProperty('--hint-left', `${rightEdge + 12}px`);
       el.parentElement?.style.setProperty('--hint-top', `${height / 2}px`);
     };
@@ -1431,17 +1431,6 @@ export default function Home() {
                 format={percent}
                 onChange={(n) =>
                   applySettings({ ...settingsRef.current, creaseBlendWidth: n })
-                }
-              />
-              <Range
-                label="Blur easing"
-                value={settings.creaseBlurEasing}
-                min={1}
-                max={4}
-                step={0.1}
-                format={(n) => n.toFixed(1)}
-                onChange={(n) =>
-                  applySettings({ ...settingsRef.current, creaseBlurEasing: n })
                 }
               />
               <Range

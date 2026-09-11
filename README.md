@@ -17,7 +17,7 @@ Open the local URL printed by the server. `npm run build` creates the production
 
 - Drag left to open and right to close. Releasing near an endpoint gently settles the fold with a damped spring; enable **Precise dragging** to stop at the exact release position. This preference is local to the browser. The expansion slider and Closed / Front / Inside / Open presets let you inspect exact poses.
 - In landscape, tap the demo to animate between endpoints. Space also animates; arrow keys and Home / End work when the demo is focused.
-- Tune animation duration, progressive blur, diagonal blur, crease blend width, blur easing, and edge darkening.
+- Tune animation duration, progressive blur, diagonal blur, crease blend width, and edge darkening.
 - Upload or drop photos and videos (images up to 30 MB, videos up to 100 MB). Browser-playable MP4, WebM, and MOV files loop silently through the same shader. Video frames are capped at 1280 px and 60 texture updates per second, and playback pauses when the gallery or another tab is visible. Vertical and square images are cropped in the center to 3:2 before loading. Select multiple images to enable shuffle. New images fade through white. Unsupported formats and oversized files leave the current image in place.
 - Save, rename, restore, and delete parameter versions. Names increment automatically and include save timestamps. These snapshots contain the exposed shader settings, not image files, animation duration, or shader source.
 - Versions and animation duration stay in this browser's local storage. Clearing site data removes them. A local preview and the hosted site have separate storage.
@@ -77,3 +77,5 @@ Video samples are fetched into a bounded local blob before decoding, so playback
 Bounded landscape videos, including the bundled sample, upload directly from the decoded video element into WebGL. Their 2D canvas is drawn once for the poster, not on every frame. Larger and portrait uploads retain the bounded/cropped canvas path. Texture updates are coalesced and applied before the shader draw; mipmaps rebuild only when the video supplies a new frame. The fold shader, blur taps, curves, and resolution are unchanged. A 30 fps source remains 30 fps footage while fold motion can render independently at display cadence; physical-device frame rates are not guaranteed.
 
 Edge darkening displays a normalized 0–100% slider: the default 50% represents internal strength 1, and 100% represents strength 2. Existing saved values preserve their rendering strength under the new labels.
+
+Animation duration defaults to 1.9 seconds; the Blur easing slider has been removed. The curve editor remains available, and saved shader versions retain their internal crease-easing value for compatibility. Right-screen darkness defaults to 50%.

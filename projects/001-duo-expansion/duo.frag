@@ -123,13 +123,13 @@ vec3 sampleFlatPicture(sampler2D photo, vec2 position, vec2 size,
 
 vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
                    sampler2D photo, DuoUniforms u) {
-    float bezel = h * 0.028;
+    float bezel = h * 0.034;
     vec2 viewport = vec2(w, h) - 2.0 * bezel;
     vec2 localUV = (p - vec2(inside ? 0.0 : bezel, bezel)) /
                      vec2(inside ? w - bezel : viewport.x, viewport.y);
     float x = saturate(localUV.x);
     float camera = h * 3.5;
-    float thickness = h * 0.034;
+    float thickness = h * 0.026;
     float c = cos(angle), s = sin(angle);
     float faceZ = inside ? 0.0 : thickness;
     float anchorX = inside ? 0.0 : bezel;
@@ -218,7 +218,7 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
 // The fixed screen is fully revealed at edge-on, rather than at the end of the fold.
 float rightRevealShade(float angle, float w, float h, float strength) {
     if (angle >= PI * 0.5) return 1.0;
-    float camera = h * 3.5, thickness = h * 0.034;
+    float camera = h * 3.5, thickness = h * 0.026;
     float c = cos(angle), s = sin(angle);
     float insideEdge = c * w * camera / (camera - s * w);
     float frontEdge = (c * w - s * thickness) * camera / (camera - s * w - c * thickness);
@@ -245,7 +245,7 @@ vec3 frontCamera(vec3 color, vec2 p, float w, float h, bool cover) {
 vec3 panelColor(vec2 p, float w, float h, bool cover, bool left,
                   float angle, sampler2D photo, DuoUniforms u) {
     
-    float bezel = h * 0.028;
+    float bezel = h * 0.034;
     float edge = min(min(p.y, h - p.y), w - p.x);
     // The closed cover has a slim hinge border. The interior halves meet seamlessly.
     if (cover) edge = min(edge, p.x);
@@ -287,7 +287,8 @@ vec3 panelColor(vec2 p, float w, float h, bool cover, bool left,
 struct LeafHit { float t; vec3 p; vec3 normal; };
 
 void considerHit(inout LeafHit hit, float t, vec3 p, vec3 normal,
-                 float w, float h, float thickness) {
+                 float w, float h, float thickness, vec3 ray) {
+    if (dot(normal, ray) >= 0.0) return; // Only entry surfaces can occlude the image.
     float tolerance = h * 0.00001;
     if (t > 0.0 && t < hit.t && p.z >= -tolerance && p.z <= thickness + tolerance &&
         panelDistance(p.xy, vec2(w, h), h * 0.07) <= tolerance) {
@@ -308,7 +309,7 @@ LeafHit intersectLeaf(vec3 origin, vec3 ray, float w, float h,
             float t = (float(side) * bounds[axis] - o[axis]) / d[axis];
             vec3 n = vec3(0.0);
             n[axis] = side == 0 ? -1.0 : 1.0;
-            considerHit(hit, t, o + t * d, n, w, h, thickness);
+            considerHit(hit, t, o + t * d, n, w, h, thickness, d);
         }
     }
     float radius = h * 0.07;
@@ -318,13 +319,16 @@ LeafHit intersectLeaf(vec3 origin, vec3 ray, float w, float h,
             vec2 center = vec2(w - radius, corner == 0 ? radius : h - radius);
             vec2 relative = o.xy - center;
             float b = dot(relative, d.xy);
-            float discriminant = b*b - a * (dot(relative, relative) - radius*radius);
-            if (discriminant < 0.0) continue;
+            // Closest-approach form avoids subtracting two huge squared terms.
+            // That cancellation made grazing corner rays jump to the back face.
+            vec2 closest = relative - (b / a) * d.xy;
+            float chordSquared = radius * radius - dot(closest, closest);
+            if (chordSquared < 0.0) continue;
             for (int root = 0; root < 2; ++root) {
-                float t = (-b + (root == 0 ? -1.0 : 1.0) * sqrt(discriminant)) / a;
+                float t = -b / a + (root == 0 ? -1.0 : 1.0) * sqrt(chordSquared / a);
                 vec3 p = o + t * d;
                 if (p.x < center.x || (corner == 0 ? p.y > center.y : p.y < center.y)) continue;
-                considerHit(hit, t, p, vec3((p.xy - center) / radius, 0.0), w, h, thickness);
+                considerHit(hit, t, p, vec3((p.xy - center) / radius, 0.0), w, h, thickness, d);
             }
         }
     }
@@ -383,7 +387,7 @@ bool isGlassFace(LeafHit hit, float w, float h, float thickness) {
     if (planeDistance > h * 0.0001) return false;
     // A small silver overlap hides numerical glass/bezel speckles at the lip.
     // Clamp only the hinge coordinate so this guard never paints the open seam.
-    float silverOverlap = h * 0.007;
+    float silverOverlap = h * 0.002;
     vec2 point = vec2(max(silverOverlap, hit.p.x), hit.p.y) - vec2(0.0, bevel);
     float footprint = panelDistance(point, vec2(w - bevel, h - 2.0 * bevel), h * 0.07 - bevel);
     return hit.p.x >= -h * 0.00001 && footprint <= -silverOverlap + h * 0.000001;
@@ -411,7 +415,7 @@ vec3 rimColor(LeafHit hit, float thickness, float c, float s) {
 vec4 shadeDuo(vec2 uv, DuoUniforms u, sampler2D photo) {
     float h = u.geometry.z;
     float w = h * 0.72;
-    float thickness = h * 0.034;
+    float thickness = h * 0.026;
     float camera = h * 3.5;
     float angle = clamp(u.geometry.w, 0.0, 1.0) * PI;
     float c = cos(angle), s = sin(angle);

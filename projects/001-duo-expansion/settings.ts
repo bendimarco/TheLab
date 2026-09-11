@@ -4,7 +4,7 @@ export const defaults = {
   creaseBlendWidth: 0,
   creaseBlurEasing: 3.1,
   edgeDarkness: 1,
-  rightScreenDarkness: 0.44,
+  rightScreenDarkness: 0.5,
   closedImageAligned: 0,
   blurCurveStartX: 1,
   blurCurveEndX: 1,
