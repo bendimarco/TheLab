@@ -129,3 +129,12 @@ The diagonal feather into the image also evaluates the same Bézier: `diagonalRa
 Reducing diagonal blur near the crease also reduced shadow feather width, exposing a sharp top/bottom triangle. Shadow feathering now has an independent minimum of 1.2–2.5% of image height, increasing with tilt. A separate smoothstep fades wedge opacity across the innermost 18% of the panel, reaching zero at the hinge so it joins the stationary screen without a shadow step. Physical bezel geometry stays crisp; only the optical shadow is feathered. This deliberately separates shadow softness from photo blur radius, so an extreme blur curve cannot collapse the shadow feather.
 
 The stationary screen starts at 75% of the shared darkness setting (25% less overlay opacity). Its reveal uses `smootherstep(revealed^1.35)`, delaying the initial clearing while keeping zero endpoint slopes and a monotonic fade. It is still fully clear at edge-on. These are fixed tuning values; existing saved settings remain usable. No extra image samples or rendering passes are added.
+
+
+### Anchoring the wedge feather to the flat image boundary
+
+The wider symmetric shadow feather introduced a visible flare: its clear endpoint extended into the image by a radius that varied along the fold. Fading opacity near the hinge could soften that shape, but could not align it.
+
+The current treatment measures signed distance to the virtual picture boundary, `(min(localUV.y, 1 − localUV.y) − depth) × viewportHeight × flatScale`. With geometric reach 1, its zero contour is exactly the horizontal top or bottom of the perspective-locked image. Shadow opacity now fades only outside that boundary using `1 − smoothstep(−width, 0, distance)`. Changing width moves the dark end of the feather; the clear end stays fixed. The wide 18% hinge fade is removed, since it changed the apparent shape instead of correcting the boundary. The narrower original hinge protection remains.
+
+Diagonal photo blur can still extend into the picture and follows the editable curve. Its distance now uses the same projected coordinate, so perspective does not stretch the feather. This separates the soft photograph from the aligned shadow boundary, with no extra sampling. The tradeoff is a lighter thin wedge near flat: there is less space outside the picture for the shadow to reach full opacity. Both flat endpoints and top/bottom symmetry are preserved. Right-screen darkness tuning is unchanged.

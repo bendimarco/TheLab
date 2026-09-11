@@ -140,7 +140,10 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     float blurHingeProtection = smoothstep(0.0, 0.025, blurX);
     float diagonalRadius = u.frontCorner.y > 0.0
         ? max(0.0, u.frontBlur.x) * diagonalTurn * spatialWeight * blurHingeProtection * creaseWeight : 0.0;
-    float distanceInsideImage = max(0.0, min(localUV.y, 1.0 - localUV.y) - depth) * viewport.y;
+    // Signed distance to the virtual flat picture, not the rotating glass edge.
+    // Zero projects onto the same horizontal top/bottom line at every panel x.
+    float pictureEdgeDistance = (min(localUV.y, 1.0 - localUV.y) - depth) * viewport.y * flatScale;
+    float distanceInsideImage = max(0.0, pictureEdgeDistance);
     float diagonalMask = 1.0 - smoothstep(0.0, max(1.0, diagonalRadius * 3.0), distanceInsideImage);
     // Shape the feather into the image with the same editable Bézier.
     // It remains fully blurred at the wedge and reaches zero at the clear boundary.
@@ -150,20 +153,17 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     float imageScale = max(imageViewport.x / u.media.x, imageViewport.y / u.media.y);
     vec2 blurSpan = combinedBlur / (u.media.xy * imageScale);
     vec3 color = sampleFront(photo, uv, blurSpan, u);
-    // Keep the shadow feather independent of a small/zero diagonal blur radius.
-    // Otherwise sharper curve settings turn the wedge back into a hard triangle.
-    float shadowFeather = mix(0.012, 0.025, tilt * tilt);
-    float softness = max(shadowFeather, u.frontCorner.z + diagonalRadius / viewport.y);
-    float top = 1.0 - smoothstep(depth - softness, depth + softness, localUV.y);
-    float bottom = 1.0 - smoothstep(depth - softness, depth + softness, 1.0 - localUV.y);
+    // Feather entirely outside the flat picture. A symmetric feather leaked
+    // below its top (and above its bottom), bowing the apparent image boundary.
+    // Radius can change the feather width, but never its clear endpoint.
+    float shadowWidth = max(mix(0.012, 0.025, tilt * tilt) * viewport.y,
+                            u.frontCorner.z * viewport.y + diagonalRadius);
+    float cornerMask = 1.0 - smoothstep(-shadowWidth, 0.0, pictureEdgeDistance);
     // Keep the first/last ~14 degrees lighter without delaying wedge blur.
     // The geometric visibility still reaches zero at the exact flat endpoint.
     float cornerEndpointFade = mix(0.45, 1.0, smoothstep(0.0, 0.24, treatmentAngle));
-    // Fade the top and bottom wedge tips over a wider band before the hinge.
-    // The adjoining fixed screen has no wedge, so opacity must reach zero here.
-    float cornerHingeFade = smoothstep(0.0, 0.18, x);
     float corner = u.frontCorner.y > 0.0
-        ? saturate(u.frontCorner.x) * cornerEndpointFade * max(saturate(turn * 4.0), wedgeVisibility) * max(top, bottom) * hingeProtection * cornerHingeFade : 0.0;
+        ? saturate(u.frontCorner.x) * cornerEndpointFade * max(saturate(turn * 4.0), wedgeVisibility) * cornerMask * hingeProtection : 0.0;
     return color * (1.0 - dark) * (1.0 - corner);
 }
 
