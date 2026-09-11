@@ -567,8 +567,8 @@ canvas:focus-visible {
   opacity: 1;
   transform: scale(1);
   transition:
-    opacity 300ms ease,
-    transform 450ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 420ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    transform 520ms cubic-bezier(0.22, 0.8, 0.25, 1);
 }
 .demo.gallery-open > canvas {
   opacity: 0;
@@ -594,7 +594,7 @@ canvas:focus-visible {
   visibility: visible;
   pointer-events: auto;
   transition:
-    opacity 300ms ease 80ms,
+    opacity 300ms ease 160ms,
     visibility 0s;
 }
 .gallery-heading {
@@ -644,8 +644,9 @@ canvas:focus-visible {
   opacity: 1;
   transform: translateY(0) scale(1);
   transition:
-    opacity 280ms ease var(--card-delay),
-    transform 360ms cubic-bezier(0.22, 1, 0.36, 1) var(--card-delay);
+    opacity 280ms ease calc(160ms + var(--card-delay)),
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1)
+      calc(160ms + var(--card-delay));
 }
 .gallery-surface {
   position: relative;
