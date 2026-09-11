@@ -14,10 +14,12 @@ import {
   Upload,
   Shuffle,
   SlidersHorizontal,
+  ArrowLeft,
   X,
 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { observeDeferredHeight } from '@/lib/observe-height';
+import { createFoldHint } from '@/lib/fold-hint';
 import { Switch } from '@/components/ui/switch';
 import {
   Sheet,
@@ -129,6 +131,8 @@ export default function Home() {
   const fileInput = useRef<HTMLInputElement>(null);
   const photoTools = useRef<HTMLDivElement>(null);
   const renderer = useRef<DuoRenderer | null>(null);
+  const foldHint = useRef<ReturnType<typeof createFoldHint> | null>(null);
+  const [hintVisible, setHintVisible] = useState(false);
   const currentImage = useRef<HTMLCanvasElement | null>(null);
   const settingsRef = useRef<Settings>({ ...defaults });
   const alive = useRef(true);
@@ -265,10 +269,12 @@ export default function Home() {
     }
   }, []);
   const scrub = useCallback((n: number) => {
+    foldHint.current?.complete();
     renderer.current?.setProgress(n);
     setProgress(n);
   }, []);
   const animate = (n: number) => {
+    foldHint.current?.complete();
     renderer.current?.animate(n, duration, () => {
       if (alive.current) setProgress(n);
     });
@@ -391,6 +397,60 @@ export default function Home() {
       document.removeEventListener('visibilitychange', visibility);
     };
   }, [cancelFade]);
+
+  useEffect(() => {
+    const hint = createFoldHint({
+      show: setHintVisible,
+      nudge: () => {
+        const r = renderer.current;
+        if (
+          !r ||
+          r.progress > 0.005 ||
+          pointer.current ||
+          matchMedia('(prefers-reduced-motion: reduce)').matches
+        )
+          return () => {};
+        let running = true;
+        r.animate(0.065, 0.65, () => {
+          if (!running) return;
+          r.animate(0, 0.85, () => {
+            running = false;
+          });
+        });
+        return () => {
+          if (!running) return;
+          running = false;
+          r.stop();
+          r.setProgress(0);
+        };
+      },
+    });
+    foldHint.current = hint;
+    return () => {
+      hint.destroy();
+      foldHint.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    const sync = () => {
+      if (
+        !busy &&
+        !galleryOpen &&
+        !panelOpen &&
+        !renderError &&
+        !document.hidden &&
+        !pointer.current
+      )
+        foldHint.current?.resume();
+      else foldHint.current?.pause();
+    };
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      document.removeEventListener('visibilitychange', sync);
+      foldHint.current?.pause();
+    };
+  }, [busy, galleryOpen, panelOpen, renderError]);
 
   useEffect(() => {
     const context = (document as Document & { modelContext?: ModelContext })
@@ -791,6 +851,7 @@ export default function Home() {
             }}
             onPointerDown={(e) => {
               if (!renderer.current || e.button !== 0) return;
+              foldHint.current?.pause();
               renderer.current.stop();
               pointer.current = {
                 id: e.pointerId,
@@ -822,11 +883,22 @@ export default function Home() {
                 e.currentTarget.releasePointerCapture(e.pointerId);
               if (!p.moved && window.innerWidth > window.innerHeight)
                 animate((renderer.current?.progress ?? 0) >= 0.5 ? 0 : 1);
+              else if (!busy && !galleryOpen && !panelOpen)
+                foldHint.current?.resume();
             }}
             onPointerCancel={() => {
               pointer.current = null;
+              if (!busy && !galleryOpen && !panelOpen)
+                foldHint.current?.resume();
             }}
           />
+          <div
+            className={`fold-hint ${hintVisible ? 'visible' : ''}`}
+            aria-hidden={!hintVisible}
+          >
+            <ArrowLeft size={16} aria-hidden="true" />
+            <span>Drag left to expand</span>
+          </div>
           {renderError && (
             <p role="alert" className="error">
               {renderError}

@@ -784,3 +784,44 @@ canvas:focus-visible {
     transition: none;
   }
 }
+
+.fold-hint {
+  position: absolute;
+  left: clamp(12px, 4vw, 56px);
+  top: calc(50% - 44px);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 110px;
+  padding: 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #71737c;
+  background: #f5f5f5d9;
+  opacity: 0;
+  transform: translateX(8px) translateY(-50%);
+  pointer-events: none;
+  transition:
+    opacity 360ms ease,
+    transform 460ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.fold-hint svg {
+  flex-shrink: 0;
+}
+.fold-hint.visible {
+  opacity: 1;
+  transform: translateX(0) translateY(-50%);
+}
+@media (max-width: 500px) {
+  .fold-hint {
+    left: 8px;
+    width: 94px;
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fold-hint {
+    transition: none;
+  }
+}

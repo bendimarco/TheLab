@@ -49,6 +49,22 @@ await writeFile(
 const { observeDeferredHeight } = await import(
   pathToFileURL(join(dir, 'observe-height.mjs'))
 );
+const hintSource = await readFile(
+  new URL('../lib/fold-hint.ts', import.meta.url),
+  'utf8',
+);
+await writeFile(
+  join(dir, 'fold-hint.mjs'),
+  ts.transpileModule(hintSource, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ES2022,
+    },
+  }).outputText,
+);
+const { createFoldHint, FOLD_HINT_KEY } = await import(
+  pathToFileURL(join(dir, 'fold-hint.mjs'))
+);
 const { defaults, validSettings, ease, blurCurve, blurCurveTable } =
   await import(pathToFileURL(join(dir, 'settings.mjs')));
 const { addVersion, parseArchive, emptyArchive } = await import(
@@ -517,6 +533,102 @@ test('toolbar measurements defer layout writes, coalesce changes, and cancel on 
       [88],
       'no writes after cleanup, including late notifications',
     );
+  } finally {
+    Object.assign(globalThis, original);
+  }
+});
+
+test('fold guidance waits for idle, repeats every four seconds, and never returns after completion', () => {
+  const original = {
+    setTimeout: globalThis.setTimeout,
+    clearTimeout: globalThis.clearTimeout,
+    setInterval: globalThis.setInterval,
+    clearInterval: globalThis.clearInterval,
+    localStorage: globalThis.localStorage,
+  };
+  let clock = 0,
+    id = 0,
+    nudges = 0,
+    cancelled = 0,
+    writes = 0;
+  const timers = new Map(),
+    storage = new Map(),
+    visibility = [];
+  const schedule = (fn, delay, repeat) => {
+    timers.set(++id, { fn, at: clock + delay, repeat });
+    return id;
+  };
+  globalThis.setTimeout = (fn, ms) => schedule(fn, ms, 0);
+  globalThis.setInterval = (fn, ms) => schedule(fn, ms, ms);
+  globalThis.clearTimeout = globalThis.clearInterval = (id) =>
+    timers.delete(id);
+  globalThis.localStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => {
+      writes++;
+      storage.set(key, value);
+    },
+  };
+  const advance = (ms) => {
+    const end = clock + ms;
+    while (true) {
+      const entry = [...timers]
+        .filter(([, timer]) => timer.at <= end)
+        .sort((a, b) => a[1].at - b[1].at)[0];
+      if (!entry) break;
+      const [key, timer] = entry;
+      clock = timer.at;
+      if (timer.repeat) timer.at += timer.repeat;
+      else timers.delete(key);
+      timer.fn();
+    }
+    clock = end;
+  };
+  const options = {
+    show: (visible) => visibility.push(visible),
+    nudge: () => {
+      nudges++;
+      return () => cancelled++;
+    },
+  };
+  try {
+    const hint = createFoldHint(options);
+    hint.resume();
+    hint.resume();
+    advance(1799);
+    assert.deepEqual(visibility, []);
+    advance(1);
+    assert.deepEqual(visibility, [true]);
+    advance(2200);
+    assert.equal(nudges, 1);
+    advance(4000);
+    assert.equal(nudges, 2);
+    hint.pause();
+    assert.equal(cancelled, 2);
+    assert.equal(visibility.at(-1), false);
+    advance(12000);
+    assert.equal(nudges, 2);
+    hint.resume();
+    advance(1800);
+    assert.equal(visibility.at(-1), true);
+    hint.complete();
+    hint.complete();
+    assert.equal(
+      writes,
+      1,
+      'drag moves write the completed preference only once',
+    );
+    assert.equal(storage.get(FOLD_HINT_KEY), '1');
+    hint.resume();
+    advance(12000);
+    assert.equal(nudges, 2);
+    hint.destroy();
+    const nextVisit = createFoldHint(options);
+    nextVisit.resume();
+    advance(12000);
+    assert.equal(nudges, 2);
+    assert.equal(timers.size, 0);
+    nextVisit.destroy();
   } finally {
     Object.assign(globalThis, original);
   }
