@@ -230,10 +230,6 @@ canvas:focus-visible {
   padding-top: 16px;
 }
 .shuffle {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
   width: 42px;
   height: 42px;
   display: grid;
@@ -443,4 +439,111 @@ canvas:focus-visible {
 }
 .alignment-switch[data-checked] [data-slot='switch-thumb'] {
   transform: translateX(14px);
+}
+
+.modify.glass {
+  background: #007aff;
+  border-color: #ffffff70;
+  color: white;
+  box-shadow:
+    0 3px 12px #007aff35,
+    inset 0 1px 0 #ffffff35;
+}
+.modify.glass:hover {
+  background: #0069df;
+}
+.demo-photo-tools {
+  position: absolute;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+}
+.demo-photo-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.photo-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  white-space: nowrap;
+}
+.personal-rotation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.personal-rotation > span {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.personal-rotation small {
+  display: block;
+  font-size: 10px;
+  color: #6b6d76;
+  font-weight: 400;
+  margin-top: 2px;
+}
+.photo-stack {
+  position: relative;
+  width: 66px;
+  height: 44px;
+}
+.photo-stack img {
+  position: absolute;
+  width: 48px;
+  height: 36px;
+  object-fit: cover;
+  border: 2px solid #fff;
+  border-radius: 7px;
+  box-shadow: 0 2px 5px #20212626;
+  left: calc(var(--photo-index) * 8px);
+  top: 4px;
+  transform: rotate(
+    calc((var(--photo-index) - (var(--photo-count) - 1) / 2) * 12deg)
+  );
+  transition: transform 200ms ease;
+}
+.personal-rotation:hover .photo-stack img {
+  transform: translateY(-3px)
+    rotate(calc((var(--photo-index) - (var(--photo-count) - 1) / 2) * 18deg));
+}
+.photo-notice {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 86px;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  margin: 0 auto;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fffefb;
+  color: #9c3426;
+  font-size: 13px;
+  box-shadow: 0 2px 12px #0001;
+}
+@media (max-width: 600px) {
+  .demo-photo-tools {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+  .personal-rotation {
+    justify-content: center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .photo-stack img {
+    transition: none;
+  }
 }

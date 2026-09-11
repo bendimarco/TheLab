@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { IDBFactory } from 'fake-indexeddb';
 import assert from 'node:assert/strict';
 import ts from 'typescript';
 import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
@@ -6,7 +7,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const dir = await mkdtemp(join(tmpdir(), 'weblab-test-'));
-for (const file of ['settings', 'versions', 'renderer', 'media']) {
+for (const file of [
+  'settings',
+  'versions',
+  'renderer',
+  'media',
+  'photo-library',
+]) {
   let source = await readFile(
     new URL(`../projects/001-duo-expansion/${file}.ts`, import.meta.url),
     'utf8',
@@ -33,6 +40,9 @@ const { addVersion, parseArchive, emptyArchive } = await import(
 );
 const { DuoRenderer } = await import(pathToFileURL(join(dir, 'renderer.mjs')));
 const { decodeURL } = await import(pathToFileURL(join(dir, 'media.mjs')));
+const { readPhotos, savePhotos, photoFile } = await import(
+  pathToFileURL(join(dir, 'photo-library.mjs'))
+);
 await rm(dir, { recursive: true, force: true });
 test('saved settings round-trip independently; deleting does not reuse version numbers', () => {
   const effect = { ...defaults };
@@ -379,4 +389,41 @@ test('closed-image alignment persists and older versions remain centered', () =>
   );
   assert.deepEqual(parseArchive(JSON.stringify(aligned)), aligned);
   assert.equal(validSettings({ ...defaults, closedImageAligned: 0.5 }), false);
+});
+
+test('personal rotation persists blobs across connections and appends instead of replacing', async () => {
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = new IDBFactory();
+  try {
+    assert.deepEqual(await readPhotos(), []);
+    const first = {
+      id: 'first',
+      name: 'my-photo.jpg',
+      blob: new Blob(['photo-one'], { type: 'image/webp' }),
+      thumbnail: 'data:image/webp;base64,one',
+      addedAt: 1,
+    };
+    const second = {
+      ...first,
+      id: 'second',
+      name: 'next.png',
+      blob: new Blob(['photo-two'], { type: 'image/webp' }),
+      addedAt: 2,
+    };
+    await savePhotos([first]);
+    await savePhotos([second]);
+    const restored = await readPhotos();
+    assert.deepEqual(
+      restored.map((p) => p.id),
+      ['first', 'second'],
+    );
+    assert.equal(await restored[0].blob.text(), 'photo-one');
+    assert.equal(await photoFile(restored[1]).text(), 'photo-two');
+    assert.equal(photoFile(restored[1]).type, 'image/webp');
+    assert.equal(restored[0].thumbnail, first.thumbnail);
+    await savePhotos([]);
+    assert.equal((await readPhotos()).length, 2);
+  } finally {
+    globalThis.indexedDB = previous;
+  }
 });

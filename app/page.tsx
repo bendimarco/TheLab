@@ -34,6 +34,13 @@ import {
 } from '@/projects/001-duo-expansion/samples';
 import { decodeImage, decodeURL } from '@/projects/001-duo-expansion/media';
 import {
+  readPhotos,
+  savePhotos,
+  preparePhoto,
+  photoFile,
+  type LocalPhoto,
+} from '@/projects/001-duo-expansion/photo-library';
+import {
   addVersion,
   emptyArchive,
   parseArchive,
@@ -103,6 +110,7 @@ export default function Home() {
   const mediaJob = useRef(0);
   const fadeFrame = useRef(0);
   const imageFiles = useRef<File[]>([]);
+  const uploadLock = useRef(false);
   const imageIndex = useRef(-1);
   const pointer = useRef<{
     id: number;
@@ -117,7 +125,8 @@ export default function Home() {
   const [error, setError] = useState('');
   const [renderError, setRenderError] = useState('');
   const [status, setStatus] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
+  const [recentPhotos, setRecentPhotos] = useState<LocalPhoto[]>([]);
   const [fileCount, setFileCount] = useState(0);
   const [selectedSample, setSelectedSample] = useState<number | null>(0);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -194,15 +203,38 @@ export default function Home() {
     );
     observer.observe(el);
     const job = ++mediaJob.current;
-    void decodeURL(defaultPhoto.src)
-      .then((image) => {
+    setBusy(true);
+    void (async () => {
+      try {
+        let photos: LocalPhoto[] = [];
+        try {
+          photos = await readPhotos();
+        } catch {
+          if (alive.current && mediaJob.current === job)
+            setError(
+              'Your saved photos could not be loaded. Browser storage may be unavailable.',
+            );
+        }
+        if (!alive.current || mediaJob.current !== job) return;
+        imageFiles.current = photos.map(photoFile);
+        setFileCount(photos.length);
+        setRecentPhotos(photos.slice(-3));
+        const index = photos.length - 1;
+        imageIndex.current = index;
+        setSelectedSample(index >= 0 ? null : 0);
+        const image =
+          index >= 0
+            ? await decodeImage(imageFiles.current[index])
+            : await decodeURL(defaultPhoto.src);
         if (!alive.current || mediaJob.current !== job) return;
         currentImage.current = image;
         renderer.current?.setImage(image);
-      })
-      .catch((e) => {
+      } catch (e) {
         if (alive.current && mediaJob.current === job) setError(message(e));
-      });
+      } finally {
+        if (alive.current && mediaJob.current === job) setBusy(false);
+      }
+    })();
     const visibility = () => {
       if (document.hidden) {
         r?.stop();
@@ -400,35 +432,68 @@ export default function Home() {
     }
   }
   async function upload(files: File[]) {
-    if (!files.length || busy) return;
-    if (await changeImage(files[0])) {
+    if (!files.length || busy || uploadLock.current) return;
+    uploadLock.current = true;
+    setBusy(true);
+    setError('');
+    const prepared: LocalPhoto[] = [];
+    const skipped: string[] = [];
+    try {
+      for (const file of files) {
+        try {
+          prepared.push(await preparePhoto(await decodeImage(file), file.name));
+        } catch {
+          skipped.push(file.name);
+        }
+      }
+      if (!prepared.length)
+        throw new Error(
+          'No photos could be opened. Try JPEG, PNG, WebP, or AVIF images under 30 MB.',
+        );
+      try {
+        await savePhotos(prepared);
+      } catch {
+        throw new Error(
+          'Could not save these photos on this device. Browser storage may be full or unavailable. Your existing rotation is unchanged.',
+        );
+      }
+      const photos = await readPhotos();
+      if (!alive.current) return;
+      imageFiles.current = photos.map(photoFile);
+      setFileCount(photos.length);
+      setRecentPhotos(photos.slice(-3));
       setSelectedSample(null);
-      imageFiles.current = files;
-      imageIndex.current = 0;
-      setFileCount(files.length);
+      const index = photos.findIndex((photo) => photo.id === prepared[0].id);
+      imageIndex.current = index;
+      await changeImage(imageFiles.current[index]);
       setStatus(
-        files.length > 1
-          ? `${files.length} images selected. Shuffle to switch.`
-          : 'Image ready.',
+        `${prepared.length} ${prepared.length === 1 ? 'photo' : 'photos'} added to your rotation.`,
       );
+      if (skipped.length)
+        setError(
+          `${skipped.length} ${skipped.length === 1 ? 'file could' : 'files could'} not be opened. The other photos were saved.`,
+        );
+    } catch (e) {
+      if (alive.current) setError(message(e));
+    } finally {
+      uploadLock.current = false;
+      if (alive.current) setBusy(false);
     }
   }
   async function chooseSample(index: number) {
     if (busy) return;
     if (await changeImage(samplePhotos[index].src)) {
-      imageFiles.current = [];
       imageIndex.current = -1;
-      setFileCount(0);
       setSelectedSample(index);
       setStatus(samplePhotos[index].label);
     }
   }
   async function shuffle() {
     if (busy) return;
-    if (selectedSample !== null) {
+    if (imageFiles.current.length === 0) {
       if (samplePhotos.length < 2) return;
       const next =
-        (selectedSample +
+        ((selectedSample ?? 0) +
           1 +
           Math.floor(Math.random() * (samplePhotos.length - 1))) %
         samplePhotos.length;
@@ -436,13 +501,16 @@ export default function Home() {
       return;
     }
     const files = imageFiles.current;
-    if (files.length < 2 || busy) return;
+    if (!files.length || busy) return;
     const next =
       (imageIndex.current +
         1 +
-        Math.floor(Math.random() * (files.length - 1))) %
+        Math.floor(Math.random() * Math.max(1, files.length - 1))) %
       files.length;
-    if (await changeImage(files[next])) imageIndex.current = next;
+    if (await changeImage(files[next])) {
+      imageIndex.current = next;
+      setSelectedSample(null);
+    }
   }
   return (
     <Sheet
@@ -452,6 +520,17 @@ export default function Home() {
       disablePointerDismissal
     >
       <main className={`lab ${panelOpen ? 'panel-open' : ''}`}>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif"
+          multiple
+          hidden
+          onChange={(e) => {
+            void upload(Array.from(e.target.files ?? []));
+            e.target.value = '';
+          }}
+        />
         <SheetTrigger
           render={
             <button
@@ -540,18 +619,57 @@ export default function Home() {
               {renderError}
             </p>
           )}
-          {(selectedSample !== null
-            ? samplePhotos.length > 1
-            : fileCount > 1) && (
-            <button
-              className="glass shuffle"
-              aria-label="Shuffle images"
-              title="Shuffle images"
-              disabled={busy}
-              onClick={() => void shuffle()}
-            >
-              <Shuffle size={18} />
-            </button>
+          <div className="demo-photo-tools">
+            {fileCount > 0 && (
+              <div
+                className="personal-rotation"
+                aria-label={`${fileCount} uploaded ${fileCount === 1 ? 'photo' : 'photos'}`}
+              >
+                <div className="photo-stack" aria-hidden="true">
+                  {recentPhotos.map((photo, index) => (
+                    // eslint-disable-next-line nextjs/no-img-element
+                    <img
+                      key={photo.id}
+                      src={photo.thumbnail}
+                      alt=""
+                      style={
+                        {
+                          '--photo-index': index,
+                          '--photo-count': recentPhotos.length,
+                        } as React.CSSProperties
+                      }
+                    />
+                  ))}
+                </div>
+                <span>
+                  {fileCount} {fileCount === 1 ? 'photo' : 'photos'}
+                  <small>Your rotation</small>
+                </span>
+              </div>
+            )}
+            <div className="demo-photo-buttons">
+              <button
+                className="glass shuffle"
+                aria-label="Shuffle images"
+                title="Shuffle images"
+                disabled={busy || (fileCount === 1 && selectedSample === null)}
+                onClick={() => void shuffle()}
+              >
+                <Shuffle size={18} />
+              </button>
+              <button
+                className="glass photo-upload"
+                disabled={busy}
+                onClick={() => fileInput.current?.click()}
+              >
+                <Upload size={18} /> {busy ? 'Opening…' : 'Add photos'}
+              </button>
+            </div>
+          </div>
+          {error && (
+            <p className="photo-notice" role="alert">
+              {error}
+            </p>
           )}
         </section>
         <SheetContent className="controls" side="right" showCloseButton={false}>
@@ -826,17 +944,6 @@ export default function Home() {
               Drag to fold. Tap in landscape to open or close.
             </p>
             <div className="media-actions">
-              <input
-                ref={fileInput}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif"
-                multiple
-                hidden
-                onChange={(e) => {
-                  void upload(Array.from(e.target.files ?? []));
-                  e.target.value = '';
-                }}
-              />
               <button
                 className="glass upload"
                 disabled={busy}
