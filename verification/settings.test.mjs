@@ -726,12 +726,12 @@ test('fold guidance waits for idle, stops after interaction, and restarts on a f
   }
 });
 
-test('sample collection starts with dog, then video, lake and friend', () => {
-  assert.equal(defaultPhoto.id, 'p1001338');
-  assert.equal(defaultPhoto.kind, 'image');
+test('sample collection starts with dog video, then dog, lake and friend', () => {
+  assert.equal(defaultPhoto.id, 'p1001341');
+  assert.equal(defaultPhoto.kind, 'video');
   assert.deepEqual(
     samplePhotos.map((p) => p.label),
-    ['Dog', 'Italy video', 'Lake', 'Friend'],
+    ['Dog getting pets', 'Dog', 'Lake', 'Friend'],
   );
 });
 
@@ -1034,7 +1034,7 @@ test('unsupported video decoding cleans up its source and oversized videos alloc
   }
 });
 
-test('phones and motion/data preferences avoid automatic video loads and shuffle picks', () => {
+test('desktop and phones share video defaults while motion/data preferences use stills', () => {
   const desktop = {
     userAgent: 'Macintosh',
     coarsePointer: false,
@@ -1047,6 +1047,8 @@ test('phones and motion/data preferences avoid automatic video loads and shuffle
     { userAgent: 'iPhone' },
     { userAgent: 'Linux; Android 14; Mobile' },
     { coarsePointer: true, shortEdge: 390 },
+  ]) assert.equal(shouldPreferStillSamples({ ...desktop, ...change }), false);
+  for (const change of [
     { reducedMotion: true },
     { saveData: true },
   ])
@@ -1054,7 +1056,7 @@ test('phones and motion/data preferences avoid automatic video loads and shuffle
   assert.equal(defaultSampleIndex(false), 0);
   assert.equal(samplePhotos[defaultSampleIndex(true)].id, 'p1001338');
   assert.deepEqual(shuffleSampleIndices(false), [0, 1, 2, 3]);
-  assert.deepEqual(shuffleSampleIndices(true), [0, 2, 3]);
+  assert.deepEqual(shuffleSampleIndices(true), [1, 2, 3]);
   assert.ok(
     shuffleSampleIndices(true).every(
       (index) => samplePhotos[index].kind === 'image',

@@ -1,17 +1,17 @@
 export const samplePhotos = [
   {
+    id: 'p1001341',
+    label: 'Dog getting pets',
+    kind: 'video' as const,
+    src: '/photos/italy/p1001341-web.mp4',
+    thumbnail: '/photos/italy/p1001341-thumb.jpg',
+  },
+  {
     id: 'p1001338',
     label: 'Dog',
     kind: 'image' as const,
     src: '/photos/italy/p1001338.jpg',
     thumbnail: '/photos/italy/p1001338-thumb.jpg',
-  },
-  {
-    id: 'p1001308',
-    label: 'Italy video',
-    kind: 'video' as const,
-    src: '/photos/italy/p1001308.mp4',
-    thumbnail: '/photos/italy/p1001308-thumb.jpg',
   },
   ...[
     { id: 'p1011479', label: 'Lake' },
@@ -25,8 +25,8 @@ export const samplePhotos = [
 ];
 export const defaultPhoto = samplePhotos[0];
 
-// Phones start with a still and never encounter video through automatic shuffle.
-// The video stays available as an explicit choice in the sample picker.
+// Desktop and mobile share the video-first rotation. Explicit motion/data
+// preferences retain a still-image fallback.
 export function defaultSampleIndex(preferStills: boolean) {
   return preferStills
     ? samplePhotos.findIndex((sample) => sample.kind === 'image')
@@ -45,8 +45,6 @@ export function shouldPreferStillSamples(environment: {
   saveData: boolean;
 }) {
   return (
-    /iPhone|iPod|Android.*Mobile/i.test(environment.userAgent) ||
-    (environment.coarsePointer && environment.shortEdge <= 600) ||
     environment.reducedMotion ||
     environment.saveData
   );
