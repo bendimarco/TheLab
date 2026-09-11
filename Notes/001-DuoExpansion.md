@@ -115,3 +115,10 @@ The diagonal shadow has a separate endpoint attenuation: `mix(0.45, 1, smoothste
 ### Published starting values
 
 The web starting preset now matches the saved Version 1: main blur 56, diagonal blur 41, projected crease width 0.26, crease easing 3.3, darkness 0.58, and curve heights 0 / 0.4. The larger radii soften the free edge and wedges more strongly, while the narrower crease blend and higher exponent preserve a sharper region near the hinge. These are source defaults, so new visitors do not need a local saved version to reproduce this tuning.
+
+
+### Shared diagonal blur falloff
+
+Main blur and diagonal blur now share the same effective spatial weight: `edgeRamp(mix(curve(x), 1, shift), start, exponent)`. Previously the diagonal radius used the raw curved coordinate, bypassing the main blur's onset and exponent, so its corners stayed disproportionately blurred near the crease. Sharing the weight reduces that mismatch on both faces while retaining the fixed angular shift and projected crease gate.
+
+The diagonal feather into the image also evaluates the same Bézier: `diagonalRadius × curve(diagonalMask)`. Its zero and full-strength endpoints remain fixed. The default low-start curve keeps the clear side of the feather sharper and concentrates blur closer to the wedge. The shadow's softness continues to follow the diagonal radius, while darkness strength remains independent. This adds two cached lookup-texture reads per shaded folding-face pixel, without another photo blur pass; actual GPU timing has not been measured.

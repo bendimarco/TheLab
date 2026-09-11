@@ -121,8 +121,10 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     float panelWidth = inside ? w - bezel : viewport.x;
     float creaseWeight = creaseBlurWeight(abs(flatX - anchorX) + endShift * panelWidth,
         panelWidth, u.creaseBlur.x, u.creaseBlur.y);
-    float blur = max(0.0, u.frontProjection.z) * turn * creaseWeight *
-                 edgeRamp(blurX, u.frontProjection.w, u.frontEdge.x);
+    // Both blur treatments use the same effective hinge-to-edge falloff.
+    // Using raw blurX for the diagonals made them much stronger near the crease.
+    float spatialWeight = edgeRamp(blurX, u.frontProjection.w, u.frontEdge.x);
+    float blur = max(0.0, u.frontProjection.z) * turn * creaseWeight * spatialWeight;
     float dark = saturate(u.frontEdge.y) * turn *
                  edgeRamp(x, u.frontEdge.z, u.frontEdge.w);
     // At reach=1 the inner edge of either wedge projects to a horizontal line.
@@ -137,10 +139,12 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     // and with rotation. Its band extends inward from the geometric wedge boundary.
     float blurHingeProtection = smoothstep(0.0, 0.025, blurX);
     float diagonalRadius = u.frontCorner.y > 0.0
-        ? max(0.0, u.frontBlur.x) * diagonalTurn * blurX * blurHingeProtection * creaseWeight : 0.0;
+        ? max(0.0, u.frontBlur.x) * diagonalTurn * spatialWeight * blurHingeProtection * creaseWeight : 0.0;
     float distanceInsideImage = max(0.0, min(localUV.y, 1.0 - localUV.y) - depth) * viewport.y;
     float diagonalMask = 1.0 - smoothstep(0.0, max(1.0, diagonalRadius * 3.0), distanceInsideImage);
-    float diagonalBlur = diagonalRadius * diagonalMask;
+    // Shape the feather into the image with the same editable Bézier.
+    // It remains fully blurred at the wedge and reaches zero at the clear boundary.
+    float diagonalBlur = diagonalRadius * spatialBlurCurve(diagonalMask);
     // Combine blur widths in quadrature, using one gather instead of two passes.
     float combinedBlur = sqrt(blur * blur + diagonalBlur * diagonalBlur);
     float imageScale = max(imageViewport.x / u.media.x, imageViewport.y / u.media.y);
