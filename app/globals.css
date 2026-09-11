@@ -943,7 +943,7 @@ canvas:focus-visible {
     visibility 0s linear 320ms;
 }
 .video-controls.visible {
-  opacity: var(--transport-opacity, 1);
+  opacity: 1;
   visibility: visible;
   pointer-events: auto;
   transition:
@@ -1031,4 +1031,13 @@ canvas:focus-visible {
 .video-scrubber:has(input:focus-visible) .video-scrub-line {
   outline: 1px solid #92929a;
   outline-offset: 3px;
+}
+
+.video-transport {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  opacity: var(--transport-opacity, 1);
+  visibility: var(--transport-visibility, visible);
 }

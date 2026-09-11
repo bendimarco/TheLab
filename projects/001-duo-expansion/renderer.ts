@@ -39,6 +39,7 @@ export class DuoRenderer {
   private mediaSize = [1, 1];
   private pendingImage: HTMLCanvasElement | HTMLVideoElement | null = null;
   progress = 0;
+  onDraw?: (progress: number) => void;
   white = 0;
   settings: Settings = { ...defaults };
 
@@ -228,6 +229,7 @@ export class DuoRenderer {
         animation.done?.();
       }
     }
+    this.onDraw?.(this.progress);
     if (this.pendingImage) {
       this.uploadImage(this.pendingImage);
       this.pendingImage = null;

@@ -1312,6 +1312,16 @@ test('renderer coalesces video uploads before drawing and reuses texture between
       1,
       'same-sized video frames update existing storage',
     );
+    const renderedProgress = [];
+    renderer.onDraw = (value) => renderedProgress.push(value);
+    renderer.animation = { from: 0, to: 1, start: 1000, duration: 1000 };
+    renderer.draw(1250);
+    renderer.draw(1500);
+    assert.deepEqual(
+      renderedProgress,
+      [0.15625, 0.5],
+      'transport receives live progress before animation completion',
+    );
     renderer.dispose();
   } finally {
     for (const key of keys) globalThis[key] = original[key];

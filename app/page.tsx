@@ -155,8 +155,48 @@ function GalleryPhoto({ photo, open }: { photo: LocalPhoto; open: boolean }) {
   );
 }
 
+function videoTransportLayout(
+  stageWidth: number,
+  stageHeight: number,
+  progress: number,
+) {
+  // Project the rotating slab's corners with the shader's camera and hinge.
+  // A conservative bound fades controls before any part of the rim reaches them.
+  const phoneHeight = demoHeight(stageWidth, stageHeight, progress, false);
+  const panelWidth = phoneHeight * 0.72;
+  const depth = phoneHeight * 0.022;
+  const cameraDistance = phoneHeight * 3.5;
+  const closedHinge =
+    (-panelWidth * 0.5 * cameraDistance) / (cameraDistance - depth);
+  const hinge = closedHinge * (1 - ease(progress));
+  const angle = progress * Math.PI;
+  let projectedLeft = stageWidth / 2 + hinge;
+  for (const x of [0, panelWidth])
+    for (const z of [0, depth]) {
+      const worldX = Math.cos(angle) * x - Math.sin(angle) * z;
+      const worldZ = Math.sin(angle) * x + Math.cos(angle) * z;
+      projectedLeft = Math.min(
+        projectedLeft,
+        stageWidth / 2 +
+          hinge +
+          (worldX * cameraDistance) / (cameraDistance - worldZ),
+      );
+    }
+  const transportLeft = Math.max(12, stageWidth / 2 + closedHinge - 120);
+  const transportGap = projectedLeft - (transportLeft + 46);
+  const transportOpacity = ease(clamp((transportGap - 60) / 14));
+
+  return {
+    left: transportLeft,
+    top: stageHeight / 2,
+    opacity: transportOpacity,
+    visibility: transportGap <= 60 ? 'hidden' : 'visible',
+  };
+}
+
 export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const videoControls = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const photoTools = useRef<HTMLDivElement>(null);
   const renderer = useRef<DuoRenderer | null>(null);
@@ -423,6 +463,19 @@ export default function Home() {
       try {
         r?.dispose();
         r = new DuoRenderer(el);
+        r.onDraw = (value) => {
+          const node = videoControls.current;
+          if (!node) return;
+          const layout = videoTransportLayout(
+            el.clientWidth,
+            el.clientHeight,
+            value,
+          );
+          node.style.left = `${layout.left}px`;
+          node.style.top = `${layout.top}px`;
+          node.style.setProperty('--transport-opacity', String(layout.opacity));
+          node.style.setProperty('--transport-visibility', layout.visibility);
+        };
         renderer.current = r;
         // Fill newly introduced settings when Fast Refresh retains an older state.
         settingsRef.current = { ...defaults, ...settingsRef.current };
@@ -964,35 +1017,12 @@ export default function Home() {
     }
   }
 
-  // Project the rotating slab's corners with the shader's camera and hinge.
-  // A conservative bound fades controls before any part of the rim reaches them.
-  const stageWidth = canvas.current?.clientWidth ?? 1;
-  const stageHeight = canvas.current?.clientHeight ?? 1;
-  const phoneHeight = demoHeight(stageWidth, stageHeight, progress, false);
-  const panelWidth = phoneHeight * 0.72;
-  const depth = phoneHeight * 0.022;
-  const cameraDistance = phoneHeight * 3.5;
-  const closedHinge =
-    (-panelWidth * 0.5 * cameraDistance) / (cameraDistance - depth);
-  const hinge = closedHinge * (1 - ease(progress));
-  const angle = progress * Math.PI;
-  let projectedLeft = stageWidth / 2 + hinge;
-  for (const x of [0, panelWidth])
-    for (const z of [0, depth]) {
-      const worldX = Math.cos(angle) * x - Math.sin(angle) * z;
-      const worldZ = Math.sin(angle) * x + Math.cos(angle) * z;
-      projectedLeft = Math.min(
-        projectedLeft,
-        stageWidth / 2 +
-          hinge +
-          (worldX * cameraDistance) / (cameraDistance - worldZ),
-      );
-    }
-  const transportLeft = Math.max(12, stageWidth / 2 + closedHinge - 120);
-  const transportGap = projectedLeft - (transportLeft + 46);
-  const transportOpacity = ease(clamp((transportGap - 16) / 48));
-  const transportVisible =
-    videoActive && !galleryOpen && !busy && transportOpacity > 0;
+  const transport = videoTransportLayout(
+    canvas.current?.clientWidth ?? 1,
+    canvas.current?.clientHeight ?? 1,
+    renderer.current?.progress ?? progress,
+  );
+  const transportVisible = videoActive && !galleryOpen && !busy;
 
   return (
     <Sheet
@@ -1221,121 +1251,128 @@ export default function Home() {
             </div>
           </section>
           <div
+            ref={videoControls}
             className={`video-controls ${transportVisible ? 'visible' : ''}`}
             aria-label="Video controls"
             aria-hidden={!transportVisible}
             inert={!transportVisible}
             style={
               {
-                left: transportLeft,
-                top: stageHeight / 2,
-                '--transport-opacity': transportOpacity,
-                visibility: transportGap <= 8 ? 'hidden' : undefined,
+                left: transport.left,
+                top: transport.top,
+                '--transport-opacity': transport.opacity,
+                '--transport-visibility': transport.visibility,
               } as React.CSSProperties
             }
           >
-            <button
-              disabled={busy}
-              aria-label={
-                videoNeedsPlay || videoPaused || videoState.paused
-                  ? 'Play video'
-                  : 'Pause video'
-              }
-              onClick={() => {
-                const media = currentMedia.current;
-                if (!media) return;
-                const shouldPlay =
-                  videoNeedsPlay || videoPaused || media.playback?.().paused;
-                setVideoPaused(!shouldPlay);
-                media.setPaused(!shouldPlay);
-                if (shouldPlay) media.resume();
-                const state = media.playback?.();
-                if (state) setVideoState(state);
-              }}
-            >
-              {videoNeedsPlay || videoPaused || videoState.paused ? (
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M4 2 14 8 4 14Z" />
-                </svg>
-              ) : (
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M3 2h4v12H3zM9 2h4v12H9z" />
-                </svg>
-              )}
-            </button>
-            <button
-              aria-label="Toggle video speed"
-              onClick={() => {
-                const rate = videoState.rate === 1 ? 0.5 : 1;
-                currentMedia.current?.setRate?.(rate);
-                setVideoState((state) => ({ ...state, rate }));
-              }}
-            >
-              {videoState.rate}×
-            </button>
-            <div
-              className="video-scrubber"
-              style={
-                {
-                  '--watched': `${Math.min(1, videoState.time / (videoState.duration || 1)) * 100}%`,
-                } as React.CSSProperties
-              }
-              onPointerMove={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const fraction = Math.min(
-                  1,
-                  videoState.time / (videoState.duration || 1),
-                );
-                const distance = Math.hypot(
-                  e.clientX - (rect.left + rect.width / 2),
-                  e.clientY - (rect.top + 4 + fraction * (rect.height - 8)),
-                );
-                e.currentTarget.style.setProperty(
-                  '--proximity',
-                  distance < 40 ? '1' : '0',
-                );
-              }}
-              onPointerLeave={(e) =>
-                e.currentTarget.style.setProperty('--proximity', '0')
-              }
-            >
-              <span className="video-scrub-line" aria-hidden="true" />
-              <span
-                className="video-scrub-head"
-                aria-hidden="true"
-                style={{
-                  top: `calc(${Math.min(1, videoState.time / (videoState.duration || 1)) * 100}% + ${4 - 8 * Math.min(1, videoState.time / (videoState.duration || 1))}px)`,
+            <div className="video-transport">
+              <div
+                className="video-scrubber"
+                style={
+                  {
+                    '--watched': `${Math.min(1, videoState.time / (videoState.duration || 1)) * 100}%`,
+                  } as React.CSSProperties
+                }
+                onPointerMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const fraction = Math.min(
+                    1,
+                    videoState.time / (videoState.duration || 1),
+                  );
+                  const distance = Math.hypot(
+                    e.clientX - (rect.left + rect.width / 2),
+                    e.clientY - (rect.top + 4 + fraction * (rect.height - 8)),
+                  );
+                  e.currentTarget.style.setProperty(
+                    '--proximity',
+                    distance < 40 ? '1' : '0',
+                  );
                 }}
-              />
-              <input
-                type="range"
-                aria-label="Scrub video"
-                aria-orientation="vertical"
-                min="0"
-                max={videoState.duration || 1}
-                step="0.01"
-                value={videoState.time}
-                disabled={!videoState.duration || busy}
-                onChange={(e) => {
-                  const time = Number(e.target.value);
-                  setVideoPaused(true);
-                  currentMedia.current?.setPaused(true);
-                  currentMedia.current?.seek?.(time);
-                  setVideoState((state) => ({ ...state, time, paused: true }));
+                onPointerLeave={(e) =>
+                  e.currentTarget.style.setProperty('--proximity', '0')
+                }
+              >
+                <span className="video-scrub-line" aria-hidden="true" />
+                <span
+                  className="video-scrub-head"
+                  aria-hidden="true"
+                  style={{
+                    top: `calc(${Math.min(1, videoState.time / (videoState.duration || 1)) * 100}% + ${4 - 8 * Math.min(1, videoState.time / (videoState.duration || 1))}px)`,
+                  }}
+                />
+                <input
+                  type="range"
+                  aria-label="Scrub video"
+                  aria-orientation="vertical"
+                  min="0"
+                  max={videoState.duration || 1}
+                  step="0.01"
+                  value={videoState.time}
+                  disabled={!videoState.duration || busy}
+                  onChange={(e) => {
+                    const time = Number(e.target.value);
+                    setVideoPaused(true);
+                    currentMedia.current?.setPaused(true);
+                    currentMedia.current?.seek?.(time);
+                    setVideoState((state) => ({
+                      ...state,
+                      time,
+                      paused: true,
+                    }));
+                  }}
+                />
+              </div>
+              <button
+                disabled={busy}
+                aria-label={
+                  videoNeedsPlay || videoPaused || videoState.paused
+                    ? 'Play video'
+                    : 'Pause video'
+                }
+                onClick={() => {
+                  const media = currentMedia.current;
+                  if (!media) return;
+                  const shouldPlay =
+                    videoNeedsPlay || videoPaused || media.playback?.().paused;
+                  setVideoPaused(!shouldPlay);
+                  media.setPaused(!shouldPlay);
+                  if (shouldPlay) media.resume();
+                  const state = media.playback?.();
+                  if (state) setVideoState(state);
                 }}
-              />
+              >
+                {videoNeedsPlay || videoPaused || videoState.paused ? (
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 2 14 8 4 14Z" />
+                  </svg>
+                ) : (
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 2h4v12H3zM9 2h4v12H9z" />
+                  </svg>
+                )}
+              </button>
+              <button
+                aria-label="Toggle video speed"
+                onClick={() => {
+                  const rate = videoState.rate === 1 ? 0.5 : 1;
+                  currentMedia.current?.setRate?.(rate);
+                  setVideoState((state) => ({ ...state, rate }));
+                }}
+              >
+                {videoState.rate}×
+              </button>
             </div>
           </div>
           <div ref={photoTools} className="demo-photo-tools">
