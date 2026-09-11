@@ -238,3 +238,5 @@ Captured parallax defaults from the live controls: 12% zoom over the final 55% o
 Default video replacement: P1001341.MP4 (dog being petted) replaces P1001308 in slot two. Original 3840×2560, 14.014 seconds, 29.97003 fps; AVFoundation web export is 1920×1280 at the original frame rate, approximately 21 MB, without audio and with network optimization. Source file remains untouched. New asset names prevent stale browser caches; a matching 360px poster accompanies it. Dog still remains first, followed by dog video, lake, friend.
 
 Dog getting pets is now the first default on both desktop and mobile, followed by dog still, lake, friend. Device type no longer excludes videos from the default rotation; explicit reduced-motion/data-saving preferences and decode failures still fall back to a still. Existing personal collections retain precedence.
+
+Restored default order: dog still, original P1001308 Italy video, lake, friend. Reused the previously shipped P1001308 asset and thumbnail without another encode. Mobile retains video in its rotation, while motion/data preferences still select stills.
