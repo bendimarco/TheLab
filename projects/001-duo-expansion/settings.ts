@@ -1,4 +1,10 @@
 export const defaults = {
+  parallaxCurveStartX: 0.5724018895348837,
+  parallaxCurveStart: 0.27257401315789476,
+  parallaxCurveEndX: 0.7180081153100775,
+  parallaxCurveEnd: 0.43005756578947374,
+  parallaxZoom: 0.12,
+  parallaxSpan: 0.55,
   blurRadius: 75,
   diagonalBlurRadius: 65,
   creaseBlendWidth: 0,
@@ -13,6 +19,12 @@ export const defaults = {
 };
 export type Settings = typeof defaults;
 export const ranges: Record<keyof Settings, [number, number]> = {
+  parallaxCurveStartX: [0, 1],
+  parallaxCurveStart: [0, 1],
+  parallaxCurveEndX: [0, 1],
+  parallaxCurveEnd: [0, 1],
+  parallaxZoom: [0, 0.3],
+  parallaxSpan: [0.05, 1],
   blurRadius: [0, 160],
   diagonalBlurRadius: [0, 120],
   creaseBlendWidth: [0, 1],

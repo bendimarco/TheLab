@@ -5,27 +5,35 @@ import { clamp, defaults, type Settings } from './settings';
 export function BlurCurve({
   settings,
   onChange,
+  parallax = false,
 }: {
   settings: Settings;
+  parallax?: boolean;
   onChange: (patch: Partial<Settings>) => void;
 }) {
   const plot = useRef<HTMLDivElement>(null);
-  const handles = [
+  const handles = parallax ? [
+    ['parallaxCurveStartX', 'parallaxCurveStart'],
+    ['parallaxCurveEndX', 'parallaxCurveEnd'],
+  ] as const : [
     ['blurCurveStartX', 'blurCurveStart'],
     ['blurCurveEndX', 'blurCurveEnd'],
   ] as const;
+  const [startX, start] = handles[0];
+  const [endX, end] = handles[1];
+  const helpId = parallax ? "parallax-curve-help" : "curve-help";
   return (
     <div className="blur-curve">
       <div className="range-label">
-        <span>Blur curve</span>
+        <span>{parallax ? "Zoom easing" : "Blur curve"}</span>
         <button
           className="curve-reset"
           onClick={() =>
             onChange({
-              blurCurveStartX: defaults.blurCurveStartX,
-              blurCurveEndX: defaults.blurCurveEndX,
-              blurCurveStart: defaults.blurCurveStart,
-              blurCurveEnd: defaults.blurCurveEnd,
+              [startX]: defaults[startX],
+              [endX]: defaults[endX],
+              [start]: defaults[start],
+              [end]: defaults[end],
             })
           }
         >
@@ -44,19 +52,19 @@ export function BlurCurve({
           />
           <path
             className="curve-tangent"
-            d={`M0 150 L${300 * settings.blurCurveStartX} ${150 * (1 - settings.blurCurveStart)} M300 0 L${300 * settings.blurCurveEndX} ${150 * (1 - settings.blurCurveEnd)}`}
+            d={`M0 150 L${300 * settings[startX]} ${150 * (1 - settings[start])} M300 0 L${300 * settings[endX]} ${150 * (1 - settings[end])}`}
           />
           <path
             className="curve-line"
-            d={`M0 150 C${300 * settings.blurCurveStartX} ${150 * (1 - settings.blurCurveStart)} ${300 * settings.blurCurveEndX} ${150 * (1 - settings.blurCurveEnd)} 300 0`}
+            d={`M0 150 C${300 * settings[startX]} ${150 * (1 - settings[start])} ${300 * settings[endX]} ${150 * (1 - settings[end])} 300 0`}
           />
         </svg>
         {handles.map(([xKey, key], i) => (
           <button
             key={key}
             className="curve-handle"
-            aria-label={`${i === 0 ? 'Hinge' : 'Outer edge'} blur curve handle`}
-            aria-describedby="curve-help"
+            aria-label={`${parallax ? (i === 0 ? 'Start zoom' : 'End zoom') : (i === 0 ? 'Hinge blur' : 'Outer edge blur')} curve handle`}
+            aria-describedby={helpId}
             style={{
               left: `${settings[xKey] * 100}%`,
               top: `${(1 - settings[key]) * 100}%`,
@@ -113,20 +121,20 @@ export function BlurCurve({
                         ),
               });
             }}
-            title={`Position ${Math.round(settings[xKey] * 100)}%, blur ${Math.round(settings[key] * 100)}%`}
+            title={`Position ${Math.round(settings[xKey] * 100)}%, amount ${Math.round(settings[key] * 100)}%`}
           >
             <span className="sr-only">
-              Position {Math.round(settings[xKey] * 100)} percent, blur{' '}
+              Position {Math.round(settings[xKey] * 100)} percent, amount{' '}
               {Math.round(settings[key] * 100)} percent
             </span>
           </button>
         ))}
       </div>
       <div className="curve-axis">
-        <span>Hinge · sharp</span>
-        <span>Free edge · blurred</span>
+        <span>{parallax ? "Start · zoomed in" : "Hinge · sharp"}</span>
+        <span>{parallax ? "End · full image" : "Free edge · blurred"}</span>
       </div>
-      <p className="hint" id="curve-help">
+      <p className="hint" id={helpId}>
         Drag handles in any direction. Move them toward the corners for a
         steeper curve. Arrow keys adjust; Shift moves faster.
       </p>

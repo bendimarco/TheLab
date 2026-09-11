@@ -20,6 +20,7 @@ struct DuoUniforms {
     vec4 raster;   // drawable width/height for pixel-sized reconstruction
     vec4 uvX;     // upright UV -> encoded texture UV (video orientation)
     vec4 uvY;
+    vec4 parallax; // zoom amount, final fraction of fold used for zoom-out
     vec4 frontProjection; // enabled, perspective lock, blur radius (points), blur start
     vec4 frontEdge;       // blur exponent, dark amount, dark start, dark exponent
     vec4 frontCorner;     // dark amount, geometric reach, softness, onset (radians)
@@ -53,6 +54,11 @@ float creaseBlurWeight(float distance, float panelWidth, float width, float curv
 }
 
 vec2 encodedUV(vec2 uv, DuoUniforms u) {
+    // The crop relaxes over the configured final fraction of opening.
+    // Shared by both screens and all blur taps, before video orientation mapping.
+    float settle = u.parallax.z; // Bézier evaluated once per frame on the CPU.
+    float imageZoom = mix(1.0 + u.parallax.x, 1.0, settle);
+    uv = (uv - 0.5) / imageZoom + 0.5;
     return vec2(dot(u.uvX.xy, uv) + u.uvX.z, dot(u.uvY.xy, uv) + u.uvY.z);
 }
 
@@ -273,7 +279,7 @@ vec3 panelColor(vec2 p, float w, float h, bool cover, bool left,
                                (p.y - bezel) / (h - 2.0*bezel)),
                         vec2(2.0*w - 2.0*bezel, h - 2.0*bezel), u.media.xy);
     }
-    uv = vec2(dot(u.uvX.xy, uv) + u.uvX.z, dot(u.uvY.xy, uv) + u.uvY.z);
+    uv = encodedUV(uv, u);
     vec3 color = textureLod(photo, uv, 0.0).rgb;
     // Retain the old inside lighting only for snapshots predating the inside effect.
     float shade = left ? 1.0 - 0.23 * sin(angle) : 1.0;

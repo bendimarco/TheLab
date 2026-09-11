@@ -228,3 +228,9 @@ The silver reflection bands were replaced with smooth broad lighting and a singl
 Keep the poster seek position until playback begins: resetting currentTime asynchronously immediately before play adds a competing seek. Desktop transport changes decoder playbackRate without resampling the source; seeked refreshes the canvas and shader while paused, then the next presented frame returns bounded landscape videos to direct texture upload. UI time updates run at 5 Hz independently of shader/video cadence. User pause is separate from gallery/visibility suspension. Legacy uploaded-video previews are regenerated with an explicit preview version and JPEG encoding; the original video bytes and record IDs are retained.
 
 Muted inline playback is requested, but [WebKit autoplay policy](https://webkit.org/blog/7734/auto-play-policy-changes-for-macos/) can still require a gesture. Desktop provides a small Play control; mobile retries from interaction with the demo. No implementation can promise playback against a browser's explicit autoplay restriction.
+
+### End-of-opening image parallax
+
+The shared image UV mapping defaults to a 1.08x center crop and relaxes to 1x over expansion 0.60–1 using quintic easing. Applying this before encoded video orientation keeps both panels, all blur samples, photos, and videos in sync. It adds no texture samples or media copies and reverses naturally during closing. Parallax zoom controls expose amount (0–30%) and final fold duration (5–100%); saved versions migrate with the new defaults. Changes remain local until explicitly approved for push.
+
+Captured parallax defaults from the live controls: 12% zoom over the final 55% of opening, with Bézier handles (0.5724018895, 0.2725740132) and (0.7180081153, 0.4300575658). The curve is evaluated once per rendered frame on the CPU and passed as a uniform.

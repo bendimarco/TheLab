@@ -1657,6 +1657,17 @@ export default function Home() {
                   }
                 }}
               />
+              <fieldset className="parallax-controls">
+                <legend>Parallax zoom</legend>
+                <Range label="Zoom amount" value={settings.parallaxZoom}
+                  max={ranges.parallaxZoom[1]} step={0.01} format={percent}
+                  onChange={(n) => applySettings({ ...settingsRef.current, parallaxZoom: n })} />
+                <Range label="Fold duration" value={settings.parallaxSpan}
+                  min={ranges.parallaxSpan[0]} max={1} step={0.01} format={percent}
+                  onChange={(n) => applySettings({ ...settingsRef.current, parallaxSpan: n })} />
+                <BlurCurve parallax settings={settings}
+                  onChange={(patch) => applySettings({ ...settingsRef.current, ...patch })} />
+              </fieldset>
               <Range
                 label="Progressive blur"
                 value={settings.blurRadius}

@@ -270,6 +270,12 @@ test('canvas resize redraws before returning, skips unchanged buffer sizes and r
 
 test('new sessions start with stronger blur and the captured curve', () => {
   assert.deepEqual(defaults, {
+    parallaxCurveStartX: 0.5724018895348837,
+    parallaxCurveStart: 0.27257401315789476,
+    parallaxCurveEndX: 0.7180081153100775,
+    parallaxCurveEnd: 0.43005756578947374,
+    parallaxZoom: 0.12,
+    parallaxSpan: 0.55,
     blurRadius: 75,
     diagonalBlurRadius: 65,
     creaseBlendWidth: 0,

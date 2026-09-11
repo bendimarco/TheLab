@@ -1041,3 +1041,6 @@ canvas:focus-visible {
   opacity: var(--transport-opacity, 1);
   visibility: var(--transport-visibility, visible);
 }
+
+.parallax-controls { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 18px; }
+.parallax-controls legend { padding: 0; margin-bottom: 18px; font-size: 13px; color: #85858d; }

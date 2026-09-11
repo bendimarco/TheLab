@@ -33,6 +33,12 @@ export function parseArchive(raw: string | null): Archive {
     // Preserve existing versions while retiring the removed reflection control.
     if (v?.settings && typeof v.settings === 'object') {
       const settings = {
+        parallaxCurveStartX: 0.5724018895348837,
+        parallaxCurveStart: 0.27257401315789476,
+        parallaxCurveEndX: 0.7180081153100775,
+        parallaxCurveEnd: 0.43005756578947374,
+        parallaxZoom: 0.12,
+        parallaxSpan: 0.55,
         closedImageAligned: 0,
         // Before this control, the fixed screen used 25% of edge darkness.
         rightScreenDarkness: v.settings.edgeDarkness * 0.25,

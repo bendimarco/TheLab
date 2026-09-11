@@ -2,6 +2,7 @@ import { settledProgress, demoHeight } from './interaction';
 import fragment from './duo.frag?raw';
 import {
   blurCurveTable,
+  blurCurve,
   clamp,
   defaults,
   ease,
@@ -251,6 +252,10 @@ export class DuoRenderer {
     uniform('raster', [this.canvas.width, this.canvas.height, 0, 0]);
     uniform('uvX', [1, 0, 0, 0]);
     uniform('uvY', [0, 1, 0, 0]);
+    const zoomTime = clamp((this.progress - (1 - s.parallaxSpan)) / s.parallaxSpan);
+    const zoomEase = blurCurve(zoomTime, s.parallaxCurveStart, s.parallaxCurveEnd,
+      s.parallaxCurveStartX, s.parallaxCurveEndX);
+    uniform('parallax', [s.parallaxZoom, s.parallaxSpan, zoomEase, 0]);
     uniform('frontProjection', [1, 1, s.blurRadius, 0.12]);
     uniform('frontEdge', [1.6, s.edgeDarkness, 0.18, 1.5]);
     uniform('frontCorner', [0.97, 1, 0.006, 0]);
