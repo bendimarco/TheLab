@@ -56,3 +56,184 @@ export async function decodeURL(url: string): Promise<HTMLCanvasElement> {
   );
   return canvas;
 }
+
+export function isVideo(file: Pick<File, 'type' | 'name'>): boolean {
+  return (
+    file.type.startsWith('video/') ||
+    (!file.type && /\.(mp4|m4v|mov|webm)$/i.test(file.name))
+  );
+}
+
+export type DecodedMedia = {
+  canvas: HTMLCanvasElement;
+  kind: 'image' | 'video';
+  start: (onFrame: () => void, onError: (error: Error) => void) => void;
+  setPaused: (paused: boolean) => void;
+  dispose: () => void;
+};
+
+// Video frames share the same centered landscape crop as still images.
+export function videoCrop(width: number, height: number) {
+  const cropHeight = width <= height ? width / 1.5 : height;
+  const scale = Math.min(1, 1280 / Math.max(width, cropHeight));
+  return {
+    y: (height - cropHeight) / 2,
+    cropHeight,
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(cropHeight * scale)),
+  };
+}
+
+export async function decodeMedia(
+  source: File | string,
+): Promise<DecodedMedia> {
+  if (typeof source === 'string' || !isVideo(source)) {
+    const canvas =
+      typeof source === 'string'
+        ? await decodeURL(source)
+        : await decodeImage(source);
+    return { canvas, kind: 'image', start() {}, setPaused() {}, dispose() {} };
+  }
+  if (source.size > 100 * 1024 * 1024)
+    throw new Error('Choose a video smaller than 100 MB.');
+  const video = document.createElement('video');
+  video.muted = true;
+  video.defaultMuted = true;
+  video.loop = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  const url = URL.createObjectURL(source);
+  let disposed = false;
+  let paused = false;
+  let started = false;
+  let frame = 0;
+  let lastTime = -1;
+  let lastUpload = -Infinity;
+  let onFrame = () => {};
+  let onError = (_error: Error) => {};
+  const nativeFrames = typeof video.requestVideoFrameCallback === 'function';
+  const cancelFrame = () => {
+    if (nativeFrames) video.cancelVideoFrameCallback(frame);
+    else cancelAnimationFrame(frame);
+    frame = 0;
+  };
+  const syncPlayback = () => {
+    if (disposed) return;
+    if (!started || paused || document.hidden) {
+      video.pause();
+      cancelFrame();
+    } else {
+      void video
+        .play()
+        .then(() => {
+          if (!disposed && !paused && !document.hidden && !frame) schedule();
+        })
+        .catch(() => {
+          if (!disposed && !paused && !document.hidden)
+            onError(
+              new Error(
+                'Video playback was blocked. Select the video again to retry.',
+              ),
+            );
+        });
+    }
+  };
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    cancelFrame();
+    document.removeEventListener('visibilitychange', syncPlayback);
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    URL.revokeObjectURL(url);
+  };
+  let draw = () => {};
+  const tick = (now: number) => {
+    frame = 0;
+    if (disposed || paused || document.hidden) return;
+    // Upload decoded frames at most 60 times/second; no work for duplicate frames.
+    if (
+      video.readyState >= 2 &&
+      video.currentTime !== lastTime &&
+      now - lastUpload >= 1000 / 60 - 1
+    ) {
+      draw();
+      lastTime = video.currentTime;
+      lastUpload = now;
+      onFrame();
+    }
+    schedule();
+  };
+  function schedule() {
+    frame = nativeFrames
+      ? video.requestVideoFrameCallback(tick)
+      : requestAnimationFrame(tick);
+  }
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timeout);
+        video.removeEventListener('loadeddata', ready);
+        video.removeEventListener('error', failed);
+      };
+      const ready = () => {
+        cleanup();
+        resolve();
+      };
+      const failed = () => {
+        cleanup();
+        reject(
+          new Error(
+            'This video cannot be played by your browser. Try an H.264 MP4 or WebM video.',
+          ),
+        );
+      };
+      const timeout = setTimeout(failed, 15000);
+      video.addEventListener('loadeddata', ready);
+      video.addEventListener('error', failed);
+      video.src = url;
+      video.load();
+    });
+    if (!video.videoWidth || !video.videoHeight)
+      throw new Error('This video has no usable dimensions.');
+    const crop = videoCrop(video.videoWidth, video.videoHeight);
+    const canvas = document.createElement('canvas');
+    canvas.width = crop.width;
+    canvas.height = crop.height;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) throw new Error('Could not prepare this video.');
+    draw = () =>
+      context.drawImage(
+        video,
+        0,
+        crop.y,
+        video.videoWidth,
+        crop.cropHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+    draw();
+    document.addEventListener('visibilitychange', syncPlayback);
+    return {
+      canvas,
+      kind: 'video',
+      start(update, error) {
+        onFrame = update;
+        onError = error;
+        started = true;
+        syncPlayback();
+      },
+      setPaused(value) {
+        paused = value;
+        syncPlayback();
+      },
+      dispose,
+    };
+  } catch (error) {
+    dispose();
+    throw error;
+  }
+}

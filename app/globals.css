@@ -825,3 +825,19 @@ canvas:focus-visible {
     transition: none;
   }
 }
+
+.video-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 12px;
+  color: white;
+  background: #0007;
+  backdrop-filter: blur(12px);
+  font-size: 11px;
+  pointer-events: none;
+}

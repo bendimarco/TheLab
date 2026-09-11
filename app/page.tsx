@@ -9,6 +9,7 @@ import {
 } from 'react';
 import {
   Plus,
+  Play,
   History,
   Trash2,
   Upload,
@@ -29,6 +30,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { BlurCurve } from '@/projects/001-duo-expansion/BlurCurve';
+import { releaseTarget } from '@/projects/001-duo-expansion/interaction';
 import { DuoRenderer } from '@/projects/001-duo-expansion/renderer';
 import {
   defaults,
@@ -41,7 +43,11 @@ import {
   defaultPhoto,
   samplePhotos,
 } from '@/projects/001-duo-expansion/samples';
-import { decodeImage, decodeURL } from '@/projects/001-duo-expansion/media';
+import {
+  decodeMedia,
+  isVideo,
+  type DecodedMedia,
+} from '@/projects/001-duo-expansion/media';
 import {
   readPhotos,
   deletePhoto,
@@ -79,6 +85,7 @@ function Range({
   step = 0.01,
   format,
   onChange,
+  onCommit,
 }: {
   label: string;
   value: number;
@@ -87,6 +94,7 @@ function Range({
   step?: number;
   format: (n: number) => string;
   onChange: (n: number) => void;
+  onCommit?: (n: number) => void;
 }) {
   return (
     <div className="range">
@@ -95,6 +103,9 @@ function Range({
         <output>{format(value)}</output>
       </div>
       <Slider
+        onValueCommitted={(value) =>
+          onCommit?.(typeof value === 'number' ? value : value[0])
+        }
         aria-label={label}
         aria-valuetext={format(value)}
         value={[value]}
@@ -113,7 +124,12 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 function GalleryPhoto({ photo, open }: { photo: LocalPhoto; open: boolean }) {
   const image = useRef<HTMLImageElement>(null);
   useEffect(() => {
-    if (!open || !image.current) return;
+    if (
+      !open ||
+      !image.current ||
+      isVideo({ type: photo.blob.type, name: photo.name })
+    )
+      return;
     const element = image.current;
     const url = URL.createObjectURL(photo.blob);
     element.src = url;
@@ -123,7 +139,14 @@ function GalleryPhoto({ photo, open }: { photo: LocalPhoto; open: boolean }) {
     };
   }, [photo.blob, photo.thumbnail, open]);
   // eslint-disable-next-line nextjs/no-img-element
-  return <img ref={image} src={photo.thumbnail} alt="" loading="lazy" />;
+  return (
+    <img
+      ref={image}
+      src={photo.poster ?? photo.thumbnail}
+      alt=""
+      loading="lazy"
+    />
+  );
 }
 
 export default function Home() {
@@ -134,6 +157,10 @@ export default function Home() {
   const foldHint = useRef<ReturnType<typeof createFoldHint> | null>(null);
   const [hintVisible, setHintVisible] = useState(false);
   const currentImage = useRef<HTMLCanvasElement | null>(null);
+  const currentMedia = useRef<DecodedMedia | null>(null);
+  const pendingMedia = useRef<DecodedMedia | null>(null);
+  const finishFade = useRef<((success: boolean) => void) | null>(null);
+  const mediaPaused = useRef(false);
   const settingsRef = useRef<Settings>({ ...defaults });
   const alive = useRef(true);
   const mediaJob = useRef(0);
@@ -147,9 +174,14 @@ export default function Home() {
     y: number;
     progress: number;
     moved: boolean;
+    lastProgress: number;
+    lastTime: number;
+    velocity: number;
+    dragged: boolean;
   } | null>(null);
   const [settings, setSettings] = useState<Settings>({ ...defaults });
   const [progress, setProgress] = useState(0);
+  const [preciseDragging, setPreciseDragging] = useState(false);
   const [duration, setDuration] = useState(1.2);
   const [error, setError] = useState('');
   const [renderError, setRenderError] = useState('');
@@ -273,6 +305,15 @@ export default function Home() {
     renderer.current?.setProgress(n);
     setProgress(n);
   }, []);
+  const settle = (velocity = 0) => {
+    const r = renderer.current;
+    if (!r) return;
+    const target = releaseTarget(r.progress, velocity, preciseDragging);
+    if (target !== null)
+      r.settle(target, velocity, () => {
+        if (alive.current) setProgress(target);
+      });
+  };
   const animate = (n: number) => {
     foldHint.current?.complete();
     renderer.current?.animate(n, duration, () => {
@@ -280,9 +321,34 @@ export default function Home() {
     });
   };
 
+  const activateMedia = useCallback((media: DecodedMedia) => {
+    currentMedia.current?.dispose();
+    currentMedia.current = media;
+    pendingMedia.current = null;
+    currentImage.current = media.canvas;
+    renderer.current?.setImage(media.canvas);
+    media.setPaused(mediaPaused.current);
+    media.start(
+      () => renderer.current?.setImage(media.canvas),
+      (error) => {
+        if (alive.current && currentMedia.current === media)
+          setError(error.message);
+      },
+    );
+  }, []);
+
+  useEffect(() => {
+    mediaPaused.current = galleryOpen || !!renderError;
+    currentMedia.current?.setPaused(mediaPaused.current);
+  }, [galleryOpen, renderError]);
+
   const cancelFade = useCallback(() => {
     ++mediaJob.current;
     cancelAnimationFrame(fadeFrame.current);
+    finishFade.current?.(false);
+    finishFade.current = null;
+    pendingMedia.current?.dispose();
+    pendingMedia.current = null;
   }, []);
 
   useEffect(() => {
@@ -295,6 +361,9 @@ export default function Home() {
       setArchiveError(message(e));
     }
     try {
+      setPreciseDragging(
+        localStorage.getItem('lab.duo.precise-dragging') === '1',
+      );
       const saved = localStorage.getItem('weblab.duo.duration');
       if (saved && Number.isFinite(Number(saved)))
         setDuration(clamp(Number(saved), 0.25, 6));
@@ -345,7 +414,7 @@ export default function Home() {
         } catch {
           if (alive.current && mediaJob.current === job)
             setError(
-              'Your saved photos could not be loaded. Browser storage may be unavailable.',
+              'Your saved media could not be loaded. Browser storage may be unavailable.',
             );
         }
         if (!alive.current || mediaJob.current !== job) return;
@@ -355,13 +424,14 @@ export default function Home() {
         const index = photos.length - 1;
         imageIndex.current = index;
         setSelectedSample(index >= 0 ? null : 0);
-        const image =
-          index >= 0
-            ? await decodeImage(imageFiles.current[index])
-            : await decodeURL(defaultPhoto.src);
-        if (!alive.current || mediaJob.current !== job) return;
-        currentImage.current = image;
-        renderer.current?.setImage(image);
+        const media = await decodeMedia(
+          index >= 0 ? imageFiles.current[index] : defaultPhoto.src,
+        );
+        if (!alive.current || mediaJob.current !== job) {
+          media.dispose();
+          return;
+        }
+        activateMedia(media);
       } catch (e) {
         if (alive.current && mediaJob.current === job) setError(message(e));
       } finally {
@@ -388,6 +458,8 @@ export default function Home() {
     return () => {
       alive.current = false;
       cancelFade();
+      currentMedia.current?.dispose();
+      currentMedia.current = null;
       observer.disconnect();
       stopObservingTools();
       r?.dispose();
@@ -396,7 +468,7 @@ export default function Home() {
       el.removeEventListener('webglcontextrestored', initialize);
       document.removeEventListener('visibilitychange', visibility);
     };
-  }, [cancelFade]);
+  }, [cancelFade, activateMedia]);
 
   useEffect(() => {
     const hint = createFoldHint({
@@ -562,7 +634,8 @@ export default function Home() {
     }
   }
   async function changeImage(source: File | string = defaultPhoto.src) {
-    const job = ++mediaJob.current;
+    cancelFade();
+    const job = mediaJob.current;
     setBusy(true);
     setError('');
     // Stop an older fade at its current value. The old image stays until decode succeeds.
@@ -572,19 +645,20 @@ export default function Home() {
       renderer.current.requestDraw();
     }
     try {
-      const image =
-        typeof source === 'string'
-          ? await decodeURL(source)
-          : await decodeImage(source);
-      if (!alive.current || job !== mediaJob.current) return false;
+      const media = await decodeMedia(source);
+      if (!alive.current || job !== mediaJob.current) {
+        media.dispose();
+        return false;
+      }
+      pendingMedia.current = media;
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (reduced) {
-        currentImage.current = image;
-        renderer.current?.setImage(image);
+        activateMedia(media);
         setBusy(false);
         return true;
       }
       return await new Promise<boolean>((resolve) => {
+        finishFade.current = resolve;
         const start = performance.now();
         let swapped = false;
         const tick = (now: number) => {
@@ -595,8 +669,7 @@ export default function Home() {
           const t = clamp((now - start) / 480);
           const r = renderer.current;
           if (t >= 0.5 && !swapped) {
-            currentImage.current = image;
-            r?.setImage(image);
+            activateMedia(media);
             swapped = true;
           }
           if (r) {
@@ -606,6 +679,7 @@ export default function Home() {
           if (t < 1) fadeFrame.current = requestAnimationFrame(tick);
           else {
             setBusy(false);
+            finishFade.current = null;
             resolve(true);
           }
         };
@@ -629,20 +703,31 @@ export default function Home() {
     try {
       for (const file of files) {
         try {
-          prepared.push(await preparePhoto(await decodeImage(file), file.name));
+          const media = await decodeMedia(file);
+          try {
+            prepared.push(
+              await preparePhoto(
+                media.canvas,
+                file.name,
+                media.kind === 'video' ? file : undefined,
+              ),
+            );
+          } finally {
+            media.dispose();
+          }
         } catch {
           skipped.push(file.name);
         }
       }
       if (!prepared.length)
         throw new Error(
-          'No photos could be opened. Try JPEG, PNG, WebP, or AVIF images under 30 MB.',
+          'No files could be opened. Choose images under 30 MB or browser-playable videos under 100 MB (MP4 or WebM recommended).',
         );
       try {
         await savePhotos(prepared);
       } catch {
         throw new Error(
-          'Could not save these photos on this device. Browser storage may be full or unavailable. Your existing rotation is unchanged.',
+          'Could not save these files on this device. Browser storage may be full or unavailable. Your existing rotation is unchanged.',
         );
       }
       const photos = await readPhotos();
@@ -656,11 +741,11 @@ export default function Home() {
       imageIndex.current = index;
       await changeImage(imageFiles.current[index]);
       setStatus(
-        `${prepared.length} ${prepared.length === 1 ? 'photo' : 'photos'} added to your rotation.`,
+        `${prepared.length} ${prepared.length === 1 ? 'item' : 'items'} added to your rotation.`,
       );
       if (skipped.length)
         setError(
-          `${skipped.length} ${skipped.length === 1 ? 'file could' : 'files could'} not be opened. The other photos were saved.`,
+          `${skipped.length} ${skipped.length === 1 ? 'file could' : 'files could'} not be opened. The other files were saved.`,
         );
     } catch (e) {
       if (alive.current) setError(message(e));
@@ -783,7 +868,7 @@ export default function Home() {
         <input
           ref={fileInput}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif"
+          accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,video/x-m4v,.mp4,.webm,.mov,.m4v"
           multiple
           hidden
           onChange={(e) => {
@@ -859,6 +944,10 @@ export default function Home() {
                 y: e.clientY,
                 progress: renderer.current.progress,
                 moved: false,
+                dragged: false,
+                lastProgress: renderer.current.progress,
+                lastTime: e.timeStamp,
+                velocity: 0,
               };
               e.currentTarget.setPointerCapture(e.pointerId);
             }}
@@ -867,13 +956,19 @@ export default function Home() {
               if (!p || p.id !== e.pointerId) return;
               const dx = e.clientX - p.x;
               if (Math.hypot(dx, e.clientY - p.y) > 5) p.moved = true;
-              if (p.moved && Math.abs(dx) > Math.abs(e.clientY - p.y))
-                scrub(
-                  clamp(
-                    p.progress -
-                      dx / Math.max(140, e.currentTarget.clientWidth * 0.55),
-                  ),
+              if (p.moved && Math.abs(dx) > Math.abs(e.clientY - p.y)) {
+                const next = clamp(
+                  p.progress -
+                    dx / Math.max(140, e.currentTarget.clientWidth * 0.55),
                 );
+                const elapsed = e.timeStamp - p.lastTime;
+                if (elapsed > 0)
+                  p.velocity = (next - p.lastProgress) / (elapsed / 1000);
+                p.lastProgress = next;
+                p.lastTime = e.timeStamp;
+                p.dragged = true;
+                scrub(next);
+              }
             }}
             onPointerUp={(e) => {
               const p = pointer.current;
@@ -883,8 +978,12 @@ export default function Home() {
                 e.currentTarget.releasePointerCapture(e.pointerId);
               if (!p.moved && window.innerWidth > window.innerHeight)
                 animate((renderer.current?.progress ?? 0) >= 0.5 ? 0 : 1);
-              else if (!busy && !galleryOpen && !panelOpen)
-                foldHint.current?.resume();
+              else {
+                if (p.dragged)
+                  settle(e.timeStamp - p.lastTime < 100 ? p.velocity : 0);
+                if (!busy && !galleryOpen && !panelOpen)
+                  foldHint.current?.resume();
+              }
             }}
             onPointerCancel={() => {
               pointer.current = null;
@@ -912,7 +1011,7 @@ export default function Home() {
           >
             <div className="gallery-heading">
               <h2 id="personal-gallery-title">
-                Your photos <span>{fileCount}</span>
+                Your collection <span>{fileCount}</span>
               </h2>
             </div>
             <div ref={galleryGrid} className="gallery-grid">
@@ -938,6 +1037,14 @@ export default function Home() {
                         onClick={() => void choosePersonalPhoto(index)}
                       >
                         <GalleryPhoto photo={photo} open={galleryOpen} />
+                        {isVideo({
+                          type: photo.blob.type,
+                          name: photo.name,
+                        }) && (
+                          <span className="video-badge">
+                            <Play size={14} fill="currentColor" /> Video
+                          </span>
+                        )}
                       </button>
                     </div>
                     <button
@@ -957,8 +1064,8 @@ export default function Home() {
           <div ref={photoTools} className="demo-photo-tools">
             <button
               className="glass shuffle"
-              aria-label="Shuffle images"
-              title="Shuffle images"
+              aria-label="Shuffle media"
+              title="Shuffle media"
               disabled={
                 busy ||
                 galleryOpen ||
@@ -974,13 +1081,13 @@ export default function Home() {
               disabled={busy}
               onClick={() => fileInput.current?.click()}
             >
-              <Upload size={18} /> Add photos
+              <Upload size={18} /> Add media
             </button>
             {fileCount > 0 && (
               <button
                 ref={galleryTrigger}
                 className="personal-rotation"
-                aria-label={`View ${fileCount} uploaded ${fileCount === 1 ? 'photo' : 'photos'}`}
+                aria-label={`View ${fileCount} uploaded items`}
                 aria-expanded={galleryOpen}
                 onClick={() =>
                   galleryOpen ? closeGallery() : setGalleryOpen(true)
@@ -1011,7 +1118,16 @@ export default function Home() {
                   ))}
                 </span>
                 <span>
-                  {fileCount} {fileCount === 1 ? 'Photo' : 'Photos'}
+                  {fileCount}{' '}
+                  {personalPhotos.some((p) =>
+                    isVideo({ type: p.blob.type, name: p.name }),
+                  )
+                    ? fileCount === 1
+                      ? 'Item'
+                      : 'Items'
+                    : fileCount === 1
+                      ? 'Photo'
+                      : 'Photos'}
                 </span>
               </button>
             )}
@@ -1151,6 +1267,7 @@ export default function Home() {
             )}
             <div className="pose">
               <Range
+                onCommit={() => settle()}
                 label="Expansion"
                 value={progress}
                 max={1}
@@ -1176,6 +1293,32 @@ export default function Home() {
               </div>
             </div>
             <div className="parameter-grid">
+              <div className="range alignment-control">
+                <div className="range-label">
+                  <label htmlFor="precise-dragging">Precise dragging</label>
+                  <Switch
+                    id="precise-dragging"
+                    className="alignment-switch"
+                    checked={preciseDragging}
+                    title="Stop exactly where you release, without snapping open or closed"
+                    onCheckedChange={(checked) => {
+                      setPreciseDragging(checked);
+                      if (checked) {
+                        renderer.current?.stop();
+                        setProgress(renderer.current?.progress ?? progress);
+                      }
+                      try {
+                        localStorage.setItem(
+                          'lab.duo.precise-dragging',
+                          checked ? '1' : '0',
+                        );
+                      } catch {
+                        /* Session preference still applies. */
+                      }
+                    }}
+                  />
+                </div>
+              </div>
               <div className="range alignment-control">
                 <div className="range-label">
                   <label htmlFor="closed-image-alignment">
@@ -1301,7 +1444,7 @@ export default function Home() {
                 onClick={() => fileInput.current?.click()}
               >
                 <Upload size={17} />
-                Upload images
+                Upload media
               </button>
               <button
                 className="text-button"

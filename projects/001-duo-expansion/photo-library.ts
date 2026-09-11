@@ -4,6 +4,7 @@ export type LocalPhoto = {
   name: string;
   blob: Blob;
   thumbnail: string;
+  poster?: string;
   addedAt: number;
 };
 const DATABASE = 'lab.personal-photos';
@@ -57,6 +58,7 @@ export async function savePhotos(photos: LocalPhoto[]): Promise<void> {
 export async function preparePhoto(
   canvas: HTMLCanvasElement,
   name: string,
+  originalVideo?: File,
 ): Promise<LocalPhoto> {
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
@@ -84,7 +86,8 @@ export async function preparePhoto(
   return {
     id: crypto.randomUUID(),
     name,
-    blob,
+    blob: originalVideo ?? blob,
+    ...(originalVideo ? { poster: canvas.toDataURL('image/webp', 0.85) } : {}),
     thumbnail: thumbnail.toDataURL('image/webp', 0.8),
     addedAt: Date.now(),
   };

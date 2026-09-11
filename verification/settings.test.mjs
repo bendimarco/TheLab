@@ -12,6 +12,8 @@ for (const file of [
   'versions',
   'renderer',
   'media',
+  'interaction',
+  'samples',
   'photo-library',
 ]) {
   let source = await readFile(
@@ -30,7 +32,8 @@ for (const file of [
         module: ts.ModuleKind.ES2022,
       },
     })
-    .outputText.replace("'./settings'", "'./settings.mjs'");
+    .outputText.replace("'./settings'", "'./settings.mjs'")
+    .replace("'./interaction'", "'./interaction.mjs'");
   await writeFile(join(dir, `${file}.mjs`), output);
 }
 const heightSource = await readFile(
@@ -75,6 +78,16 @@ const { decodeURL } = await import(pathToFileURL(join(dir, 'media.mjs')));
 const { readPhotos, savePhotos, deletePhoto, photoFile } = await import(
   pathToFileURL(join(dir, 'photo-library.mjs'))
 );
+const { releaseTarget, settledProgress } = await import(
+  pathToFileURL(join(dir, 'interaction.mjs'))
+);
+const { decodeMedia, isVideo, videoCrop } = await import(
+  pathToFileURL(join(dir, 'media.mjs'))
+);
+const { samplePhotos, defaultPhoto } = await import(
+  pathToFileURL(join(dir, 'samples.mjs'))
+);
+
 await rm(dir, { recursive: true, force: true });
 test('saved settings round-trip independently; deleting does not reuse version numbers', () => {
   const effect = { ...defaults };
@@ -631,5 +644,249 @@ test('fold guidance waits for idle, repeats every four seconds, and never return
     nextVisit.destroy();
   } finally {
     Object.assign(globalThis, original);
+  }
+});
+
+test('sample collection starts with dog, then lake, friend and sunset', () => {
+  assert.equal(defaultPhoto.id, 'p1001338');
+  assert.deepEqual(
+    samplePhotos.map((p) => p.label),
+    ['Dog', 'Lake', 'Friend', 'Sunset'],
+  );
+});
+
+test('release physics attract nearby endpoints, respect momentum and allow precise poses', () => {
+  assert.equal(releaseTarget(0.15, 0, false), 0);
+  assert.equal(releaseTarget(0.85, 0, false), 1);
+  assert.equal(releaseTarget(0.5, 0, false), null);
+  assert.equal(
+    releaseTarget(0.5, 100, false),
+    null,
+    'long flicks cannot skip across the whole fold',
+  );
+  assert.equal(releaseTarget(0.75, 0.5, false), 1);
+  assert.equal(releaseTarget(0.25, -0.5, false), 0);
+  for (const p of [0.01, 0.15, 0.5, 0.85, 0.99])
+    assert.equal(releaseTarget(p, 1, true), null);
+  for (const [from, to] of [
+    [0.18, 0],
+    [0.82, 1],
+  ]) {
+    let previous = from;
+    for (let i = 0; i <= 85; i++) {
+      const p = settledProgress(from, to, 0, i / 100);
+      assert.ok(p >= 0 && p <= 1);
+      assert.ok(Math.abs(p - to) <= Math.abs(previous - to));
+      previous = p;
+    }
+    assert.equal(previous, to);
+  }
+});
+
+test('video formats and portrait crops preserve the centered landscape window', () => {
+  assert.equal(isVideo({ name: 'clip.MOV', type: '' }), true);
+  assert.equal(isVideo({ name: 'clip', type: 'video/mp4' }), true);
+  assert.equal(isVideo({ name: 'image.mp4', type: 'image/webp' }), false);
+  assert.deepEqual(videoCrop(1080, 1920), {
+    y: 600,
+    cropHeight: 720,
+    width: 1080,
+    height: 720,
+  });
+  assert.deepEqual(videoCrop(3840, 2160), {
+    y: 0,
+    cropHeight: 2160,
+    width: 1280,
+    height: 720,
+  });
+});
+
+test('video resource updates only new frames and pauses/releases its decoder and URL', async () => {
+  const original = {
+    document: globalThis.document,
+    create: URL.createObjectURL,
+    revoke: URL.revokeObjectURL,
+  };
+  const callbacks = new Map();
+  const draws = [];
+  let callbackId = 0,
+    plays = 0,
+    pauses = 0,
+    updates = 0,
+    revoked = 0;
+  class FakeVideo extends EventTarget {
+    videoWidth = 1080;
+    videoHeight = 1920;
+    readyState = 2;
+    currentTime = 0;
+    src = '';
+    load() {
+      if (this.src)
+        queueMicrotask(() => this.dispatchEvent(new Event('loadeddata')));
+    }
+    play() {
+      plays++;
+      return Promise.resolve();
+    }
+    pause() {
+      pauses++;
+    }
+    removeAttribute() {
+      this.src = '';
+    }
+    requestVideoFrameCallback(callback) {
+      callbacks.set(++callbackId, callback);
+      return callbackId;
+    }
+    cancelVideoFrameCallback(id) {
+      callbacks.delete(id);
+    }
+  }
+  const video = new FakeVideo();
+  const doc = new EventTarget();
+  doc.hidden = false;
+  doc.createElement = (tag) =>
+    tag === 'video'
+      ? video
+      : {
+          width: 0,
+          height: 0,
+          getContext: () => ({ drawImage: (...args) => draws.push(args) }),
+        };
+  globalThis.document = doc;
+  URL.createObjectURL = () => 'blob:test-video';
+  URL.revokeObjectURL = () => revoked++;
+  try {
+    const media = await decodeMedia(
+      new File(['clip'], 'clip.mp4', { type: 'video/mp4' }),
+    );
+    assert.equal(video.muted, true);
+    assert.equal(video.loop, true);
+    assert.equal(video.playsInline, true);
+    assert.deepEqual([media.canvas.width, media.canvas.height], [1080, 720]);
+    assert.deepEqual(draws[0].slice(1), [0, 600, 1080, 720, 0, 0, 1080, 720]);
+    media.start(() => updates++, assert.fail);
+    await Promise.resolve();
+    const tick = (now, time) => {
+      const [id, fn] = callbacks.entries().next().value;
+      callbacks.delete(id);
+      video.currentTime = time;
+      fn(now);
+    };
+    tick(0, 0);
+    tick(40, 0);
+    tick(50, 0.033);
+    tick(60, 0.066);
+    tick(90, 0.099);
+    assert.equal(updates, 3, 'duplicates and updates above 60fps are skipped');
+    media.setPaused(true);
+    assert.equal(callbacks.size, 0);
+    media.setPaused(false);
+    await Promise.resolve();
+    assert.equal(callbacks.size, 1);
+    doc.hidden = true;
+    doc.dispatchEvent(new Event('visibilitychange'));
+    assert.equal(callbacks.size, 0);
+    doc.hidden = false;
+    doc.dispatchEvent(new Event('visibilitychange'));
+    await Promise.resolve();
+    assert.equal(callbacks.size, 1);
+    assert.ok(plays >= 3);
+    assert.ok(pauses >= 2);
+    media.dispose();
+    media.dispose();
+    assert.equal(callbacks.size, 0);
+    assert.equal(revoked, 1);
+    assert.equal(video.src, '');
+    doc.dispatchEvent(new Event('visibilitychange'));
+    assert.equal(callbacks.size, 0);
+  } finally {
+    globalThis.document = original.document;
+    URL.createObjectURL = original.create;
+    URL.revokeObjectURL = original.revoke;
+  }
+});
+
+test('video blobs and posters survive library round trips without changing image entries', async () => {
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = new IDBFactory();
+  try {
+    const video = {
+      id: 'video',
+      name: 'clip.mov',
+      blob: new Blob(['original-video'], { type: 'video/quicktime' }),
+      thumbnail: 'thumb',
+      poster: 'poster',
+      addedAt: 2,
+    };
+    const photo = {
+      id: 'photo',
+      name: 'old.jpg',
+      blob: new Blob(['photo'], { type: 'image/webp' }),
+      thumbnail: 'thumb',
+      addedAt: 1,
+    };
+    await savePhotos([photo, video]);
+    const restored = await readPhotos();
+    assert.equal(restored[0].poster, undefined);
+    assert.equal(restored[1].poster, 'poster');
+    const file = photoFile(restored[1]);
+    assert.equal(file.type, 'video/quicktime');
+    assert.equal(await file.text(), 'original-video');
+    await deletePhoto('video');
+    assert.deepEqual(
+      (await readPhotos()).map((p) => p.id),
+      ['photo'],
+    );
+  } finally {
+    globalThis.indexedDB = previous;
+  }
+});
+
+test('unsupported video decoding cleans up its source and oversized videos allocate nothing', async () => {
+  const original = {
+    document: globalThis.document,
+    create: URL.createObjectURL,
+    revoke: URL.revokeObjectURL,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+  };
+  let allocated = 0,
+    revoked = 0;
+  class BrokenVideo extends EventTarget {
+    src = '';
+    load() {
+      if (this.src)
+        queueMicrotask(() => this.dispatchEvent(new Event('error')));
+    }
+    pause() {}
+    removeAttribute() {
+      this.src = '';
+    }
+  }
+  const doc = new EventTarget();
+  doc.createElement = () => new BrokenVideo();
+  globalThis.document = doc;
+  globalThis.cancelAnimationFrame = () => {};
+  URL.createObjectURL = () => {
+    allocated++;
+    return 'blob:broken';
+  };
+  URL.revokeObjectURL = () => revoked++;
+  try {
+    const tooLarge = new File([], 'big.mp4', { type: 'video/mp4' });
+    Object.defineProperty(tooLarge, 'size', { value: 101 * 1024 * 1024 });
+    await assert.rejects(decodeMedia(tooLarge), /100 MB/);
+    assert.equal(allocated, 0);
+    await assert.rejects(
+      decodeMedia(new File(['bad'], 'bad.mp4', { type: 'video/mp4' })),
+      /cannot be played/,
+    );
+    assert.equal(allocated, 1);
+    assert.equal(revoked, 1);
+  } finally {
+    globalThis.document = original.document;
+    globalThis.cancelAnimationFrame = original.cancelAnimationFrame;
+    URL.createObjectURL = original.create;
+    URL.revokeObjectURL = original.revoke;
   }
 });

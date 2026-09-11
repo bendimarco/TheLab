@@ -1,3 +1,4 @@
+import { settledProgress } from './interaction';
 import fragment from './duo.frag?raw';
 import {
   blurCurveTable,
@@ -28,6 +29,7 @@ export class DuoRenderer {
     to: number;
     start: number;
     duration: number;
+    velocity?: number;
     done?: () => void;
   };
   private disposed = false;
@@ -110,9 +112,31 @@ export class DuoRenderer {
 
   setImage(source: HTMLCanvasElement) {
     const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    if (
+      source.width === this.mediaSize[0] &&
+      source.height === this.mediaSize[1]
+    )
+      gl.texSubImage2D(
+        gl.TEXTURE_2D,
+        0,
+        0,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        source,
+      );
+    else
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        source,
+      );
     gl.generateMipmap(gl.TEXTURE_2D);
     this.mediaSize = [source.width, source.height];
     this.requestDraw();
@@ -159,6 +183,11 @@ export class DuoRenderer {
     };
     this.requestDraw();
   }
+  settle(to: number, velocity: number, done?: () => void) {
+    this.animate(to, 0.85, done);
+    if (this.animation)
+      this.animation.velocity = Math.max(-2, Math.min(2, velocity));
+  }
   stop() {
     this.animation = undefined;
   }
@@ -173,7 +202,14 @@ export class DuoRenderer {
     if (animation) {
       const t = clamp((now - animation.start) / animation.duration);
       this.progress =
-        animation.from + (animation.to - animation.from) * ease(t);
+        animation.velocity === undefined
+          ? animation.from + (animation.to - animation.from) * ease(t)
+          : settledProgress(
+              animation.from,
+              animation.to,
+              animation.velocity,
+              (now - animation.start) / 1000,
+            );
       if (t >= 1) {
         this.animation = undefined;
         animation.done?.();
