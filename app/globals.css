@@ -127,7 +127,7 @@ canvas:focus-visible {
 }
 @media (max-width: 600px), (pointer: coarse) and (max-height: 600px) {
   :root {
-    --mobile-sheet-height: min(72dvh, 640px);
+    --mobile-sheet-height: min(48dvh, 420px);
     --mobile-sheet-bottom: max(12px, env(safe-area-inset-bottom));
   }
   .panel-open .demo {
@@ -135,6 +135,19 @@ canvas:focus-visible {
     height: calc(
       100% - var(--mobile-sheet-height) - var(--mobile-sheet-bottom) - 12px
     );
+  }
+  .panel-open .demo canvas {
+    height: calc(100% - 12px);
+  }
+  .demo-photo-tools {
+    transition:
+      opacity 180ms ease,
+      visibility 180ms;
+  }
+  .panel-open .demo-photo-tools {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
   }
   .panel-open .modify,
   .panel-open .gallery-dismiss {
@@ -601,7 +614,8 @@ canvas:focus-visible {
   transform: scale(1);
   transition:
     opacity 420ms cubic-bezier(0.2, 0.75, 0.25, 1),
-    transform 520ms cubic-bezier(0.22, 0.8, 0.25, 1);
+    transform 520ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    height var(--panel-motion);
 }
 .demo.gallery-open > canvas {
   opacity: 0;
