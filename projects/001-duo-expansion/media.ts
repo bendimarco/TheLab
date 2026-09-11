@@ -66,8 +66,14 @@ export function isVideo(file: Pick<File, 'type' | 'name'>): boolean {
 
 export type DecodedMedia = {
   canvas: HTMLCanvasElement;
+  textureSource: HTMLCanvasElement | HTMLVideoElement;
   kind: 'image' | 'video';
-  start: (onFrame: () => void, onError: (error: Error) => void) => void;
+  start: (
+    onFrame: () => void,
+    onError: (error: Error) => void,
+    onNeedsPlay?: (needed: boolean) => void,
+  ) => void;
+  resume: () => void;
   setPaused: (paused: boolean) => void;
   dispose: () => void;
 };
@@ -84,6 +90,36 @@ export function videoCrop(width: number, height: number) {
   };
 }
 
+// Retain only one small compressed sample, never a decoder or GPU resource.
+// Cycling back to it avoids fetching/buffering the same clip again.
+let sampleCache: { source: string; blob: Blob } | null = null;
+async function fetchSampleVideo(source: string): Promise<Blob> {
+  if (sampleCache?.source === source) return sampleCache.blob;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    // Buffer samples locally: some static hosts ignore the decoder's HTTP Range.
+    const response = await fetch(source, { signal: controller.signal });
+    if (!response.ok)
+      throw new Error(
+        'The sample video could not be downloaded. Please try again.',
+      );
+    if (Number(response.headers.get('content-length')) > 100 * 1024 * 1024)
+      throw new Error('Choose a video smaller than 100 MB.');
+    const blob = await response.blob();
+    if (blob.size > 100 * 1024 * 1024)
+      throw new Error('Choose a video smaller than 100 MB.');
+    sampleCache = blob.size <= 12 * 1024 * 1024 ? { source, blob } : null;
+    return blob;
+  } catch (error) {
+    if (controller.signal.aborted)
+      throw new Error('The video download took too long. Please try again.');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function decodeMedia(
   source: File | string,
 ): Promise<DecodedMedia> {
@@ -96,7 +132,15 @@ export async function decodeMedia(
       typeof source === 'string'
         ? await decodeURL(source)
         : await decodeImage(source);
-    return { canvas, kind: 'image', start() {}, setPaused() {}, dispose() {} };
+    return {
+      canvas,
+      textureSource: canvas,
+      kind: 'image',
+      start() {},
+      resume() {},
+      setPaused() {},
+      dispose() {},
+    };
   }
   if (typeof source !== 'string' && source.size > 100 * 1024 * 1024)
     throw new Error('Choose a video smaller than 100 MB.');
@@ -106,9 +150,11 @@ export async function decodeMedia(
   video.loop = true;
   video.playsInline = true;
   video.preload = 'auto';
-  const ownsURL = typeof source !== 'string';
-  const url = typeof source === 'string' ? source : URL.createObjectURL(source);
+  const blob =
+    typeof source === 'string' ? await fetchSampleVideo(source) : source;
+  const url = URL.createObjectURL(blob);
   let disposed = false;
+  let failed = false;
   let paused = false;
   let started = false;
   let frame = 0;
@@ -116,6 +162,9 @@ export async function decodeMedia(
   let lastUpload = -Infinity;
   let onFrame = () => {};
   let onError = (_error: Error) => {};
+  let onNeedsPlay = (_needed: boolean) => {};
+  let playRequest = 0;
+  let playPending = false;
   const nativeFrames = typeof video.requestVideoFrameCallback === 'function';
   const cancelFrame = () => {
     if (nativeFrames) video.cancelVideoFrameCallback(frame);
@@ -123,48 +172,88 @@ export async function decodeMedia(
     frame = 0;
   };
   const syncPlayback = () => {
-    if (disposed) return;
+    if (disposed || failed) return;
     if (!started || paused || document.hidden) {
+      ++playRequest;
+      playPending = false;
       video.pause();
       cancelFrame();
-    } else {
-      void video
-        .play()
-        .then(() => {
-          if (!disposed && !paused && !document.hidden && !frame) schedule();
-        })
-        .catch(() => {
-          if (!disposed && !paused && !document.hidden)
-            onError(
-              new Error(
-                'Video playback was blocked. Select the video again to retry.',
-              ),
-            );
-        });
+      return;
     }
+    if (playPending || frame) return;
+    const request = ++playRequest;
+    playPending = true;
+    // Called synchronously by resume() inside the Play button's click handler.
+    // Deferring this behind image decoding or a fade loses Safari's user gesture.
+    void video
+      .play()
+      .then(() => {
+        if (disposed || request !== playRequest || paused || document.hidden)
+          return;
+        playPending = false;
+        onNeedsPlay(false);
+        if (!frame) schedule();
+      })
+      .catch((error: unknown) => {
+        if (disposed || request !== playRequest || paused || document.hidden)
+          return;
+        playPending = false;
+        const name = error instanceof Error ? error.name : '';
+        if (name === 'NotAllowedError' || name === 'AbortError') {
+          onNeedsPlay(true);
+        } else {
+          onError(
+            new Error(
+              'This video could not play. Try an H.264 MP4 or a different video.',
+            ),
+          );
+        }
+      });
+  };
+  const runtimeError = () => {
+    if (disposed || failed) return;
+    failed = true;
+    ++playRequest;
+    playPending = false;
+    cancelFrame();
+    onNeedsPlay(false);
+    if (started)
+      onError(
+        new Error('Video decoding stopped. Try selecting another video.'),
+      );
   };
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    ++playRequest;
     cancelFrame();
     document.removeEventListener('visibilitychange', syncPlayback);
+    video.removeEventListener('error', runtimeError);
     video.pause();
     video.removeAttribute('src');
     video.load();
-    if (ownsURL) URL.revokeObjectURL(url);
+    URL.revokeObjectURL(url);
   };
   let draw = () => {};
-  const tick = (now: number) => {
+  let directVideoTexture = false;
+  const tick = (now: number, metadata?: VideoFrameCallbackMetadata) => {
     frame = 0;
-    if (disposed || paused || document.hidden) return;
+    if (disposed || failed || paused || document.hidden) return;
+    // currentTime can move between decoded frames. Prefer a decoded-frame identity.
+    const quality =
+      !metadata && typeof video.getVideoPlaybackQuality === 'function'
+        ? video.getVideoPlaybackQuality()
+        : undefined;
+    const stamp =
+      metadata?.mediaTime ?? quality?.totalVideoFrames ?? video.currentTime;
     // Upload decoded frames at most 60 times/second; no work for duplicate frames.
     if (
       video.readyState >= 2 &&
-      video.currentTime !== lastTime &&
+      stamp !== lastTime &&
       now - lastUpload >= 1000 / 60 - 1
     ) {
-      draw();
-      lastTime = video.currentTime;
+      if (!directVideoTexture) draw();
+      lastTime = stamp;
       lastUpload = now;
       onFrame();
     }
@@ -221,14 +310,30 @@ export async function decodeMedia(
         canvas.height,
       );
     draw();
+    // Uncropped, bounded videos (including our sample) can go straight to WebGL.
+    // Larger/portrait uploads retain the bounded canvas path to preserve their crop.
+    directVideoTexture =
+      video.videoWidth === canvas.width && video.videoHeight === canvas.height;
     document.addEventListener('visibilitychange', syncPlayback);
+    video.addEventListener('error', runtimeError);
     return {
       canvas,
+      textureSource: directVideoTexture ? video : canvas,
       kind: 'video',
-      start(update, error) {
+      start(update, error, needsPlay) {
+        onNeedsPlay = needsPlay ?? (() => {});
         onFrame = update;
         onError = error;
         started = true;
+        if (failed) {
+          onError(
+            new Error('Video decoding stopped. Try selecting another video.'),
+          );
+          return;
+        }
+        syncPlayback();
+      },
+      resume() {
         syncPlayback();
       },
       setPaused(value) {

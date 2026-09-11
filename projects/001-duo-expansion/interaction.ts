@@ -27,3 +27,21 @@ export function settledProgress(
       Math.exp(-omega * seconds);
   return Math.max(0, Math.min(1, value));
 }
+
+// Small collections are predictable; larger ones sample without repeating the active item.
+export function nextRotationIndex(
+  current: number,
+  indices: number[],
+  random: number,
+): number | null {
+  if (!indices.length) return null;
+  if (indices.length <= 4)
+    return indices[(indices.indexOf(current) + 1) % indices.length];
+  const candidates = indices.filter((index) => index !== current);
+  return candidates[
+    Math.min(
+      candidates.length - 1,
+      Math.max(0, Math.floor(random * candidates.length)),
+    )
+  ];
+}

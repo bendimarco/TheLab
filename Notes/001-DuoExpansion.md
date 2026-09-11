@@ -140,3 +140,43 @@ After browser decoding applies image orientation, portrait and square inputs are
 The cover normally uses a centered aspect-fill crop. With `closedImageAligned` enabled, it samples the same source region as the stationary right screen in the fully opened state. This is the requested “left-aligned” mode: matching content, not mirroring the photo or aligning it to the source image's left edge.
 
 The right screen's visible aperture has width `w − bezel`; the cover has bezels on both sides and is narrower, `w − 2 × bezel`. Normalize the cover coordinate across that aperture, then map it into the right half of the full virtual image: `rightWidth + (imagePoint.x − bezel) / coverWidth × rightWidth`. Both modes keep the same vertical coordinates and perspective lock. This gives the same normalized crop despite the small physical aperture difference. The inside face and stationary screen are unaffected. The mode uses a spare media uniform component, adds no texture reads, and is stored with versions. Older versions default to centered.
+
+## Video playback and GPU scheduling — 2026-09-11
+
+### Three different frame rates
+
+Source video cadence, texture-update cadence, and fold-render cadence are separate. The sample is 4.5045 seconds at 29.970 fps. A 60 fps render budget cannot create new footage between its decoded frames. During a fold, the renderer can update geometry between video frames while reusing the same texture and blur mipmaps. When the phone is stationary, video requires continuing draws; a still image does not. Comparing an idle image to playing video therefore does not compare equal GPU work.
+
+Even during identical fold motion, video adds decoding, color conversion, texture upload, and mipmap generation. The initial implementation also copied each decoded video frame through a 2D canvas. That copy/downscale occurs before the shader, so identical fragment code does not imply identical total frame cost.
+
+### Preserve the effect by optimizing transport first
+
+The optimized path uses `HTMLVideoElement` directly as the WebGL texture source when its native dimensions exactly match the bounded prepared canvas. This includes the 1280 × 852 sample. Its canvas is generated once for the poster; live playback skips `drawImage` entirely. Browser drivers can still perform internal color conversion and texture copies, so this is not a claim of universally zero-copy decoding.
+
+Portrait and oversized uploads retain the canvas path. It enforces the same centered 3:2 crop and 1280-pixel bound as before. Bypassing it indiscriminately would change composition or upload large 4K/8K textures every frame. A future GPU crop/downsample pass could improve that fallback, but should be measured against its extra source-texture memory and render pass before adoption.
+
+The fragment shader, 25-tap prefiltered blur gather, spatial curves, ray intersections, darkening, and material-edge refinement remain unchanged. Keep mipmaps: the shader uses explicit LOD to cover wide blur footprints without colored clumps. Dropping the mip chain or weakening the blur to gain speed would change the intended effect.
+
+### Schedule uploads with the draw
+
+`setImage` queues only the newest source and requests a draw. At the beginning of that draw, before selecting the effect program, the renderer uploads the pending texture and regenerates its mip chain. Several source notifications before one render coalesce into one upload. Repeated geometry-only draws reuse the texture and mipmaps. Same-sized sources use `texSubImage2D`; a dimension change allocates with `texImage2D`.
+
+This ordering matters because DOM-source uploads can trigger browser-internal conversion passes and pipeline flushes. [MDN's WebGL best practices](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#teximagetexsubimage_uploads_esp._videos_can_cause_pipeline_flushes) recommends uploading before drawing rather than interrupting a drawing pipeline. It is a scheduling improvement, not elimination of all driver work.
+
+Prefer `requestVideoFrameCallback` and its `mediaTime` to identify decoded frames. In the RAF fallback, prefer `getVideoPlaybackQuality().totalVideoFrames`; use `currentTime` only if neither decoded-frame signal is available. The playback clock can advance without a new decoded frame. Updates remain capped at 60 per second and are skipped for duplicate frame identities. Visibility changes suspend playback and cancel frame callbacks.
+
+### Delivery and autoplay are separate failure modes
+
+A production request on 2026-09-11 with `Range: bytes=0-31` returned HTTP 200, `video/mp4`, and the entire 4,960,707-byte sample rather than a 206 partial response. This is a concrete hosting observation, not proof that every reported playback failure was caused by ranges. The previous catch handler obscured diagnosis by labeling every rejected `play()` promise as a policy block.
+
+Small public samples now fetch into a bounded blob and use the same object-URL decoding path as local uploads, avoiding dependency on the host's range handling. A one-entry compressed-data cache retains at most 12 MiB so revisiting the sample avoids another fetch/buffer operation. Each playback still owns a separate object URL, video decoder, and callback lifecycle; disposal releases them. This is appropriate for a short sample, not a streaming architecture for long videos. Larger media would benefit from proper byte-range delivery or adaptive streaming instead of whole-file buffering.
+
+The original sample was 28,334,441 bytes at 3840 × 2560. Its published copy is silent H.264 at 1280 × 852, about 30 fps, and 4,960,707 bytes. Its `moov` atom precedes `mdat` for fast start. Reducing encoded dimensions lowers source decoding work as well as download size; merely drawing a 4K source into a smaller canvas does not avoid decoding that 4K source.
+
+A direct user gesture can be required even for muted video under site/browser policies. Decoding and fading first, then calling `play()`, can lose that gesture. Resume the existing ready decoder synchronously from the click event instead. See [WebKit's autoplay guidance](https://webkit.org/blog/7734/auto-play-policy-changes-for-macos/). Sequence play requests so rejected promises from an older pause/resume/dispose cycle cannot report an error on the new cycle. `NotAllowedError` requests a gesture; a current `AbortError` permits a resume; stale or deliberately interrupted requests are ignored. Actual decoding failures stop frame scheduling and report a distinct failure.
+
+### Verified behavior and limits
+
+Automated regressions cover bounded portrait cropping, direct-source selection, absence of per-frame canvas copies on the direct path, upload coalescing/order, same-size storage reuse, mipmap reuse during geometry-only draws, local blob persistence, object-URL cleanup, compressed sample reuse, gesture recovery, and superseded playback promises. Production compilation also passes. These tests establish resource and scheduling behavior; mocks do not measure GPU speed or prove pixel-equivalent color management across browsers.
+
+Physical iPhone frame pacing, battery use, thermal throttling, and sustained Safari performance have not been measured. No percentage speedup or guaranteed 60 fps follows from this work. The next performance comparison should use the same viewport, source frame, fold trajectory, and blur settings, then separate decode/presentation drops, main-thread copy/upload cost, and GPU draw duration. Measure both moving and stationary folds, with special attention to strongly folded poses and large blur footprints. Test a 60 fps source separately from this 30 fps clip. Preserve effect quality until measurements identify the actual bottleneck.

@@ -36,6 +36,7 @@ export class DuoRenderer {
   private width = 1;
   private height = 1;
   private mediaSize = [1, 1];
+  private pendingImage: HTMLCanvasElement | HTMLVideoElement | null = null;
   progress = 0;
   white = 0;
   settings: Settings = { ...defaults };
@@ -110,15 +111,22 @@ export class DuoRenderer {
     gl.activeTexture(gl.TEXTURE0);
   }
 
-  setImage(source: HTMLCanvasElement) {
+  setImage(source: HTMLCanvasElement | HTMLVideoElement) {
+    // Coalesce decoded frames and upload immediately before the next shader draw.
+    // DOM texture uploads can flush the GPU pipeline; avoid doing them mid-frame.
+    this.pendingImage = source;
+    this.requestDraw();
+  }
+
+  private uploadImage(source: HTMLCanvasElement | HTMLVideoElement) {
+    const width = 'videoWidth' in source ? source.videoWidth : source.width;
+    const height = 'videoHeight' in source ? source.videoHeight : source.height;
+    if (!width || !height) return;
     const gl = this.gl;
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    if (
-      source.width === this.mediaSize[0] &&
-      source.height === this.mediaSize[1]
-    )
+    if (width === this.mediaSize[0] && height === this.mediaSize[1])
       gl.texSubImage2D(
         gl.TEXTURE_2D,
         0,
@@ -138,8 +146,7 @@ export class DuoRenderer {
         source,
       );
     gl.generateMipmap(gl.TEXTURE_2D);
-    this.mediaSize = [source.width, source.height];
-    this.requestDraw();
+    this.mediaSize = [width, height];
   }
 
   resize(width: number, height: number) {
@@ -215,6 +222,10 @@ export class DuoRenderer {
         animation.done?.();
       }
     }
+    if (this.pendingImage) {
+      this.uploadImage(this.pendingImage);
+      this.pendingImage = null;
+    }
     const gl = this.gl,
       s = this.settings;
     gl.useProgram(this.program);
@@ -279,6 +290,7 @@ export class DuoRenderer {
   };
   dispose() {
     this.disposed = true;
+    this.pendingImage = null;
     cancelAnimationFrame(this.frame);
     this.gl.deleteTexture(this.texture);
     this.gl.deleteTexture(this.curveTexture);

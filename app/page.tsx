@@ -30,7 +30,10 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { BlurCurve } from '@/projects/001-duo-expansion/BlurCurve';
-import { releaseTarget } from '@/projects/001-duo-expansion/interaction';
+import {
+  releaseTarget,
+  nextRotationIndex,
+} from '@/projects/001-duo-expansion/interaction';
 import { DuoRenderer } from '@/projects/001-duo-expansion/renderer';
 import {
   defaults,
@@ -187,6 +190,7 @@ export default function Home() {
   const [preciseDragging, setPreciseDragging] = useState(false);
   const [duration, setDuration] = useState(1.2);
   const [error, setError] = useState('');
+  const [videoNeedsPlay, setVideoNeedsPlay] = useState(false);
   const [renderError, setRenderError] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(true);
@@ -326,16 +330,21 @@ export default function Home() {
 
   const activateMedia = useCallback((media: DecodedMedia) => {
     currentMedia.current?.dispose();
+    setVideoNeedsPlay(false);
     currentMedia.current = media;
     pendingMedia.current = null;
     currentImage.current = media.canvas;
-    renderer.current?.setImage(media.canvas);
+    renderer.current?.setImage(media.textureSource);
     media.setPaused(mediaPaused.current);
     media.start(
-      () => renderer.current?.setImage(media.canvas),
+      () => renderer.current?.setImage(media.textureSource),
       (error) => {
         if (alive.current && currentMedia.current === media)
           setError(error.message);
+      },
+      (needed) => {
+        if (alive.current && currentMedia.current === media)
+          setVideoNeedsPlay(needed);
       },
     );
   }, []);
@@ -394,7 +403,9 @@ export default function Home() {
         setSettings(settingsRef.current);
         r.settings = settingsRef.current;
         r.resize(el.clientWidth, el.clientHeight);
-        if (currentImage.current) r.setImage(currentImage.current);
+        if (currentMedia.current)
+          r.setImage(currentMedia.current.textureSource);
+        else if (currentImage.current) r.setImage(currentImage.current);
         setRenderError('');
       } catch (e) {
         renderer.current = null;
@@ -863,30 +874,29 @@ export default function Home() {
   }
   async function shuffle() {
     if (busy) return;
-    if (imageFiles.current.length === 0) {
-      const candidates = shuffleSampleIndices(
-        preferStillSamples.current,
-      ).filter((index) => index !== selectedSample);
-      if (!candidates.length) return;
-      // eslint-disable-next-line react/react-compiler -- Random choice runs only in the shuffle click handler.
-      await chooseSample(
-        candidates[Math.floor(Math.random() * candidates.length)],
-      );
+    const files = imageFiles.current;
+    const indices = files.length
+      ? files.map((_, index) => index)
+      : shuffleSampleIndices(preferStillSamples.current);
+    // eslint-disable-next-line react/react-compiler -- Runs only in the shuffle click handler.
+    const random = indices.length > 4 ? Math.random() : 0;
+    const next = nextRotationIndex(
+      files.length ? imageIndex.current : (selectedSample ?? -1),
+      indices,
+      random,
+    );
+    if (next === null) return;
+    if (!files.length) {
+      await chooseSample(next);
       return;
     }
-    const files = imageFiles.current;
-    if (!files.length || busy) return;
-    const next =
-      (imageIndex.current +
-        1 +
-        // eslint-disable-next-line react/react-compiler -- Random choice runs only in the shuffle click handler.
-        Math.floor(Math.random() * Math.max(1, files.length - 1))) %
-      files.length;
     if (await changeImage(files[next])) {
       imageIndex.current = next;
       setSelectedSample(null);
+      setStatus(files[next].name);
     }
   }
+
   return (
     <Sheet
       open={panelOpen}
@@ -1094,6 +1104,15 @@ export default function Home() {
             </div>
           </section>
           <div ref={photoTools} className="demo-photo-tools">
+            {videoNeedsPlay && !galleryOpen && (
+              <button
+                className="glass video-play"
+                disabled={busy}
+                onClick={() => currentMedia.current?.resume()}
+              >
+                <Play size={17} fill="currentColor" /> Play video
+              </button>
+            )}
             <button
               className="glass shuffle"
               aria-label="Shuffle media"

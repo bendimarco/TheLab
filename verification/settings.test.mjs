@@ -78,7 +78,7 @@ const { decodeURL } = await import(pathToFileURL(join(dir, 'media.mjs')));
 const { readPhotos, savePhotos, deletePhoto, photoFile } = await import(
   pathToFileURL(join(dir, 'photo-library.mjs'))
 );
-const { releaseTarget, settledProgress } = await import(
+const { releaseTarget, settledProgress, nextRotationIndex } = await import(
   pathToFileURL(join(dir, 'interaction.mjs'))
 );
 const { decodeMedia, isVideo, videoCrop } = await import(
@@ -612,11 +612,11 @@ test('fold guidance waits for idle, repeats every four seconds, and never return
     const hint = createFoldHint(options);
     hint.resume();
     hint.resume();
-    advance(1799);
+    advance(2999);
     assert.deepEqual(visibility, []);
     advance(1);
     assert.deepEqual(visibility, [true]);
-    advance(2200);
+    advance(1000);
     assert.equal(nudges, 1);
     advance(4000);
     assert.equal(nudges, 2);
@@ -626,7 +626,7 @@ test('fold guidance waits for idle, repeats every four seconds, and never return
     advance(12000);
     assert.equal(nudges, 2);
     hint.resume();
-    advance(1800);
+    advance(3000);
     assert.equal(visibility.at(-1), true);
     hint.complete();
     hint.complete();
@@ -709,6 +709,7 @@ test('video formats and portrait crops preserve the centered landscape window', 
 test('video resource updates only new frames and pauses/releases its decoder and URL', async () => {
   const original = {
     document: globalThis.document,
+    fetch: globalThis.fetch,
     create: URL.createObjectURL,
     revoke: URL.revokeObjectURL,
   };
@@ -759,6 +760,11 @@ test('video resource updates only new frames and pauses/releases its decoder and
           getContext: () => ({ drawImage: (...args) => draws.push(args) }),
         };
   globalThis.document = doc;
+  let fetches = 0;
+  globalThis.fetch = async () => {
+    fetches++;
+    return new Response(new Blob(['sample-video'], { type: 'video/mp4' }));
+  };
   URL.createObjectURL = () => 'blob:test-video';
   URL.revokeObjectURL = () => revoked++;
   try {
@@ -769,17 +775,22 @@ test('video resource updates only new frames and pauses/releases its decoder and
     assert.equal(video.loop, true);
     assert.equal(video.playsInline, true);
     assert.deepEqual([media.canvas.width, media.canvas.height], [1080, 720]);
+    assert.equal(
+      media.textureSource,
+      media.canvas,
+      'portrait videos retain the bounded centered crop',
+    );
     assert.deepEqual(draws[0].slice(1), [0, 600, 1080, 720, 0, 0, 1080, 720]);
     media.start(() => updates++, assert.fail);
     await Promise.resolve();
-    const tick = (now, time) => {
+    const tick = (now, time, mediaTime = time) => {
       const [id, fn] = callbacks.entries().next().value;
       callbacks.delete(id);
       video.currentTime = time;
-      fn(now);
+      fn(now, { mediaTime });
     };
     tick(0, 0);
-    tick(40, 0);
+    tick(40, 0.01, 0);
     tick(50, 0.033);
     tick(60, 0.066);
     tick(90, 0.099);
@@ -803,19 +814,45 @@ test('video resource updates only new frames and pauses/releases its decoder and
     assert.equal(callbacks.size, 0);
     assert.equal(revoked, 1);
     assert.equal(video.src, '');
+    video.videoWidth = 1280;
+    video.videoHeight = 852;
     const remote = await decodeMedia('/photos/italy/p1001308.mp4?version=1');
-    assert.equal(video.src, '/photos/italy/p1001308.mp4?version=1');
+    assert.equal(video.src, 'blob:test-video');
     assert.equal(remote.kind, 'video');
+    assert.equal(
+      remote.textureSource,
+      video,
+      'bounded landscape video goes directly to WebGL',
+    );
+    const posterDraws = draws.length;
+    remote.start(() => updates++, assert.fail);
+    await Promise.resolve();
+    tick(150, 0.2);
+    tick(190, 0.233);
+    assert.equal(
+      draws.length,
+      posterDraws,
+      'direct playback never copies live frames through the 2D canvas',
+    );
     remote.dispose();
     assert.equal(
       revoked,
-      1,
-      'public video URLs are never treated as owned object URLs',
+      2,
+      'buffered sample URLs are released just like uploads',
     );
+    const cached = await decodeMedia('/photos/italy/p1001308.mp4?version=1');
+    assert.equal(
+      fetches,
+      1,
+      'returning to the small sample reuses its compressed bytes',
+    );
+    cached.dispose();
+    assert.equal(revoked, 3, 'each playback still owns and releases its URL');
     doc.dispatchEvent(new Event('visibilitychange'));
     assert.equal(callbacks.size, 0);
   } finally {
     globalThis.document = original.document;
+    globalThis.fetch = original.fetch;
     URL.createObjectURL = original.create;
     URL.revokeObjectURL = original.revoke;
   }
@@ -931,4 +968,235 @@ test('phones and motion/data preferences avoid automatic video loads and shuffle
       (index) => samplePhotos[index].kind === 'image',
     ),
   );
+});
+
+test('small rotations advance in order and large rotations shuffle without repeats', () => {
+  for (const count of [1, 2, 3, 4]) {
+    const indices = Array.from({ length: count }, (_, i) => i);
+    assert.equal(nextRotationIndex(-1, indices, 0.99), 0);
+    for (let i = 0; i < count; i++)
+      assert.equal(nextRotationIndex(i, indices, 0.99), (i + 1) % count);
+  }
+  assert.equal(nextRotationIndex(0, [0, 2, 3], 0), 2);
+  assert.equal(nextRotationIndex(3, [0, 2, 3], 0), 0);
+  assert.equal(nextRotationIndex(1, [0, 2, 3], 0), 0);
+  assert.equal(nextRotationIndex(0, [], 0), null);
+  for (const random of [0, 0.2, 0.5, 0.99])
+    assert.notEqual(nextRotationIndex(2, [0, 1, 2, 3, 4], random), 2);
+  assert.equal(nextRotationIndex(0, [0, 1, 2, 3, 4], 0.99), 4);
+});
+
+test('blocked playback resumes directly from a gesture and stale interruptions are ignored', async () => {
+  const original = {
+    document: globalThis.document,
+    create: URL.createObjectURL,
+    revoke: URL.revokeObjectURL,
+  };
+  let calls = 0,
+    callbackId = 0;
+  const frames = new Map(),
+    pending = [],
+    needed = [],
+    errors = [];
+  class Video extends EventTarget {
+    src = '';
+    videoWidth = 1280;
+    videoHeight = 720;
+    readyState = 2;
+    currentTime = 0;
+    mode = 'blocked';
+    load() {
+      if (this.src)
+        queueMicrotask(() => this.dispatchEvent(new Event('loadeddata')));
+    }
+    play() {
+      calls++;
+      if (this.mode === 'blocked')
+        return Promise.reject(
+          new DOMException('gesture required', 'NotAllowedError'),
+        );
+      if (this.mode === 'pending')
+        return new Promise((resolve, reject) =>
+          pending.push({ resolve, reject }),
+        );
+      return Promise.resolve();
+    }
+    pause() {}
+    removeAttribute() {
+      this.src = '';
+    }
+    requestVideoFrameCallback(fn) {
+      frames.set(++callbackId, fn);
+      return callbackId;
+    }
+    cancelVideoFrameCallback(id) {
+      frames.delete(id);
+    }
+  }
+  const video = new Video();
+  const doc = new EventTarget();
+  doc.hidden = false;
+  doc.createElement = (tag) =>
+    tag === 'video'
+      ? video
+      : { width: 0, height: 0, getContext: () => ({ drawImage() {} }) };
+  globalThis.document = doc;
+  URL.createObjectURL = () => 'blob:policy-test';
+  URL.revokeObjectURL = () => {};
+  const flush = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+  try {
+    const media = await decodeMedia(
+      new File(['clip'], 'clip.mp4', { type: 'video/mp4' }),
+    );
+    media.start(
+      () => {},
+      (e) => errors.push(e),
+      (value) => needed.push(value),
+    );
+    await flush();
+    assert.deepEqual(needed, [true]);
+    assert.equal(errors.length, 0);
+    video.mode = 'ok';
+    const before = calls;
+    media.resume();
+    assert.equal(
+      calls,
+      before + 1,
+      'play runs synchronously inside resume, preserving the click gesture',
+    );
+    await flush();
+    assert.equal(needed.at(-1), false);
+    assert.equal(frames.size, 1);
+    media.setPaused(true);
+    video.mode = 'pending';
+    media.setPaused(false);
+    media.setPaused(true);
+    media.setPaused(false);
+    pending[0].reject(new DOMException('interrupted', 'AbortError'));
+    await flush();
+    assert.equal(needed.at(-1), false);
+    assert.equal(errors.length, 0);
+    pending[1].resolve();
+    await flush();
+    assert.equal(frames.size, 1);
+    media.setPaused(true);
+    media.setPaused(false);
+    media.dispose();
+    pending[2].reject(new DOMException('disposed', 'AbortError'));
+    await flush();
+    assert.equal(frames.size, 0);
+    assert.equal(errors.length, 0);
+    video.mode = 'ok';
+    const failedMedia = await decodeMedia(
+      new File(['clip'], 'clip.mp4', { type: 'video/mp4' }),
+    );
+    failedMedia.start(
+      () => {},
+      (error) => errors.push(error),
+      (value) => needed.push(value),
+    );
+    await flush();
+    video.dispatchEvent(new Event('error'));
+    assert.equal(frames.size, 0);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0].message, /decoding stopped/);
+    const callsAfterFailure = calls;
+    failedMedia.resume();
+    assert.equal(
+      calls,
+      callsAfterFailure,
+      'a broken decoder cannot start a retry loop',
+    );
+    failedMedia.dispose();
+  } finally {
+    globalThis.document = original.document;
+    URL.createObjectURL = original.create;
+    URL.revokeObjectURL = original.revoke;
+  }
+});
+
+test('renderer coalesces video uploads before drawing and reuses texture between animation frames', () => {
+  const keys = [
+    'window',
+    'document',
+    'requestAnimationFrame',
+    'cancelAnimationFrame',
+  ];
+  const original = Object.fromEntries(keys.map((k) => [k, globalThis[k]]));
+  let id = 0;
+  const pending = new Map();
+  const events = [];
+  globalThis.window = { devicePixelRatio: 1 };
+  globalThis.document = { hidden: false };
+  globalThis.requestAnimationFrame = (fn) => {
+    pending.set(++id, fn);
+    return id;
+  };
+  globalThis.cancelAnimationFrame = (id) => pending.delete(id);
+  const gl = new Proxy(
+    {},
+    {
+      get: (_, key) => {
+        if (['getShaderParameter', 'getProgramParameter'].includes(key))
+          return () => true;
+        if (key.startsWith('create') || key === 'getUniformLocation')
+          return () => ({});
+        if (key.toUpperCase() === key) return key;
+        return (...args) => {
+          if (
+            [
+              'texImage2D',
+              'texSubImage2D',
+              'generateMipmap',
+              'drawArrays',
+              'useProgram',
+            ].includes(key)
+          )
+            events.push({ key, args });
+        };
+      },
+    },
+  );
+  const canvas = { width: 1, height: 1, getContext: () => gl };
+  try {
+    const renderer = new DuoRenderer(canvas);
+    events.length = 0;
+    const a = { videoWidth: 1280, videoHeight: 852 },
+      b = { videoWidth: 1280, videoHeight: 852 };
+    renderer.setImage(a);
+    renderer.setImage(b);
+    assert.equal(
+      events.length,
+      0,
+      'decoding callbacks do not interrupt the GPU draw pipeline',
+    );
+    assert.equal(pending.size, 1);
+    renderer.resize(800, 600);
+    const upload = events.find((e) => e.key === 'texImage2D');
+    assert.equal(upload.args.at(-1), b);
+    assert.equal(events.filter((e) => e.key === 'generateMipmap').length, 1);
+    assert.ok(
+      events.indexOf(upload) < events.findIndex((e) => e.key === 'useProgram'),
+    );
+    events.length = 0;
+    renderer.resize(800, 600);
+    assert.equal(
+      events.filter((e) => e.key === 'generateMipmap').length,
+      0,
+      'unchanged video frames reuse the blur pyramid',
+    );
+    renderer.setImage(a);
+    renderer.resize(800, 600);
+    assert.equal(
+      events.filter((e) => e.key === 'texSubImage2D').length,
+      1,
+      'same-sized video frames update existing storage',
+    );
+    renderer.dispose();
+  } finally {
+    for (const key of keys) globalThis[key] = original[key];
+  }
 });
