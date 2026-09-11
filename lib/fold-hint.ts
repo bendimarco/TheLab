@@ -8,6 +8,7 @@ export function createFoldHint(options: {
   let destroyed = false;
   let visible = false;
   let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  let firstPulseTimer: ReturnType<typeof setTimeout> | undefined;
   let nudgeTimer: ReturnType<typeof setInterval> | undefined;
   let cancelNudge: (() => void) | undefined;
   const show = (next: boolean) => {
@@ -18,6 +19,7 @@ export function createFoldHint(options: {
   const pause = () => {
     active = false;
     clearTimeout(hintTimer);
+    clearTimeout(firstPulseTimer);
     clearInterval(nudgeTimer);
     cancelNudge?.();
     cancelNudge = undefined;
@@ -35,8 +37,12 @@ export function createFoldHint(options: {
           cancelNudge?.();
           cancelNudge = options.nudge();
         };
-        pulse();
-        nudgeTimer = setInterval(pulse, 4000);
+        // The 1.4s entrance finishes, then leave a 0.5s reading pause.
+        firstPulseTimer = setTimeout(() => {
+          if (!active || destroyed) return;
+          pulse();
+          nudgeTimer = setInterval(pulse, 4000);
+        }, 1900);
       }, 1000);
     },
     pause,

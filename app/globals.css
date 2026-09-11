@@ -811,6 +811,7 @@ canvas:focus-visible {
   flex-shrink: 0;
 }
 .fold-hint.visible {
+  transition-duration: 1200ms, 1400ms;
   opacity: 1;
   transform: translateX(0) translateY(-50%);
 }
