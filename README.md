@@ -92,7 +92,7 @@ Video transport is desktop-only: quiet Play/Pause and 1×/0.5× text to the left
 
 Desktop video controls use a vertical stack of Play/Pause icons, speed, and a one-pixel vertical scrubber. Watched content is dark grey; the remainder is light grey. The small thumb fades and grows with a 280 ms ease-in-out when the pointer is within 40 px (also visible for keyboard focus). Controls fade on media changes and as the projected fold approaches them; their collision bound uses the shader's camera, hinge, rotation and slab thickness. Mobile controls remain hidden.
 
-Scrubbing pauses the video at the chosen frame; playback resumes only with Play. Transport icons use solid sharp-cornered triangle and bar shapes.
+Scrubbing preserves playback state: playing videos continue, and paused videos remain paused. Transport icons use solid sharp-cornered triangle and bar shapes.
 
 Transport collision fading is updated directly on every shader draw, including click animations, release settling and the teaser, without rendering the React tree at animation cadence. Media-selection fading remains separate. Controls fade gradually across 74–30 px of clearance and disappear before overlap; Play/Pause and speed sit below the scrub line.
 

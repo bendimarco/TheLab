@@ -1317,13 +1317,10 @@ export default function Home() {
                   disabled={!videoState.duration || busy}
                   onChange={(e) => {
                     const time = Number(e.target.value);
-                    setVideoPaused(true);
-                    currentMedia.current?.setPaused(true);
                     currentMedia.current?.seek?.(time);
                     setVideoState((state) => ({
                       ...state,
                       time,
-                      paused: true,
                     }));
                   }}
                 />
