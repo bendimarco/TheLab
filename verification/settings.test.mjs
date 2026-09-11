@@ -616,9 +616,10 @@ test('fold guidance waits for idle, stops after interaction, and restarts on a f
     assert.deepEqual(visibility, []);
     advance(1);
     assert.deepEqual(visibility, [true]);
-    advance(3000);
+    assert.equal(nudges, 1, 'first pulse starts with the hint');
+    advance(3999);
     assert.equal(nudges, 1);
-    advance(4000);
+    advance(1);
     assert.equal(nudges, 2);
     hint.pause();
     assert.equal(cancelled, 2);
@@ -633,7 +634,7 @@ test('fold guidance waits for idle, stops after interaction, and restarts on a f
     assert.equal(writes, 0, 'completion stays in memory for this visit');
     hint.resume();
     advance(12000);
-    assert.equal(nudges, 2);
+    assert.equal(nudges, 3);
     hint.destroy();
     const nextVisit = createFoldHint(options);
     nextVisit.resume();
@@ -641,12 +642,11 @@ test('fold guidance waits for idle, stops after interaction, and restarts on a f
     assert.equal(visibility.at(-1), false);
     advance(1);
     assert.equal(visibility.at(-1), true);
-    advance(3000);
-    assert.equal(nudges, 3);
+    assert.equal(nudges, 4);
     nextVisit.complete();
     nextVisit.resume();
     advance(12000);
-    assert.equal(nudges, 3);
+    assert.equal(nudges, 4);
     nextVisit.destroy();
     assert.equal(timers.size, 0);
   } finally {

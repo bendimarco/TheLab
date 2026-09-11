@@ -28,13 +28,16 @@ export function createFoldHint(options: {
       if (destroyed || learned || active) return;
       active = true;
       hintTimer = setTimeout(() => {
-        if (active && !destroyed) show(true);
-      }, 1000);
-      nudgeTimer = setInterval(() => {
         if (!active || destroyed) return;
-        cancelNudge?.();
-        cancelNudge = options.nudge();
-      }, 4000);
+        show(true);
+        const pulse = () => {
+          if (!active || destroyed) return;
+          cancelNudge?.();
+          cancelNudge = options.nudge();
+        };
+        pulse();
+        nudgeTimer = setInterval(pulse, 4000);
+      }, 1000);
     },
     pause,
     complete() {

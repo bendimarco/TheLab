@@ -529,9 +529,9 @@ export default function Home() {
         )
           return () => {};
         let running = true;
-        r.animate(0.065, 0.65, () => {
+        r.animate(0.095, 0.85, () => {
           if (!running) return;
-          r.animate(0, 0.85, () => {
+          r.animate(0, 1.05, () => {
             running = false;
           });
         });
