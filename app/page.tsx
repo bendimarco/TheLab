@@ -117,92 +117,6 @@ function GalleryPhoto({ photo, open }: { photo: LocalPhoto; open: boolean }) {
   return <img ref={image} src={photo.thumbnail} alt="" loading="lazy" />;
 }
 
-function GalleryCard({
-  photo,
-  index,
-  open,
-  busy,
-  onChoose,
-  onRemove,
-}: {
-  photo: LocalPhoto;
-  index: number;
-  open: boolean;
-  busy: boolean;
-  onChoose: () => void;
-  onRemove: (element: HTMLDivElement) => void;
-}) {
-  const card = useRef<HTMLDivElement>(null);
-  const surface = useRef<HTMLDivElement>(null);
-  const updateHover = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (event.pointerType !== 'mouse' || !card.current || !surface.current)
-      return;
-    // Measure the untransformed slot so the tilt never feeds back into the pointer coordinates.
-    const rect = card.current.getBoundingClientRect();
-    const x = clamp((event.clientX - rect.left) / rect.width, 0, 1) * 2 - 1;
-    const y = clamp((event.clientY - rect.top) / rect.height, 0, 1) * 2 - 1;
-    const style = surface.current.style;
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    style.setProperty('--tilt-x', `${reduced ? 0 : -y * 7}deg`);
-    style.setProperty('--tilt-y', `${reduced ? 0 : x * 9}deg`);
-    style.setProperty('--tilt-z', `${reduced ? 0 : x * y * 2.5}deg`);
-    const distance = Math.hypot(
-      event.clientX - (rect.right - 3),
-      event.clientY - (rect.top + 3),
-    );
-    const proximity = clamp(1 - distance / 120);
-    style.setProperty(
-      '--delete-heat',
-      String(proximity * proximity * (3 - 2 * proximity)),
-    );
-  };
-  const leave = () => {
-    if (!surface.current) return;
-    for (const property of [
-      '--tilt-x',
-      '--tilt-y',
-      '--tilt-z',
-      '--delete-heat',
-    ])
-      surface.current.style.removeProperty(property);
-  };
-  return (
-    <div
-      ref={card}
-      className="gallery-card"
-      style={
-        {
-          '--card-delay': `${Math.min(index, 6) * 45}ms`,
-        } as React.CSSProperties
-      }
-    >
-      <div ref={surface} className="gallery-surface">
-        <button
-          className="gallery-pick"
-          disabled={busy}
-          aria-label={`Use ${photo.name}`}
-          onClick={onChoose}
-          onPointerMove={updateHover}
-          onPointerLeave={leave}
-        >
-          <GalleryPhoto photo={photo} open={open} />
-        </button>
-        <button
-          className="glass gallery-remove"
-          disabled={busy}
-          aria-label={`Remove ${photo.name}`}
-          title="Remove photo"
-          onPointerMove={updateHover}
-          onPointerLeave={leave}
-          onClick={() => card.current && onRemove(card.current)}
-        >
-          <X size={13} strokeWidth={2} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -604,7 +518,7 @@ export default function Home() {
       if (alive.current) setBusy(false);
     }
   }
-  async function removePhoto(id: string, element: HTMLDivElement) {
+  async function removePhoto(id: string) {
     if (busy || uploadLock.current) return;
     uploadLock.current = true;
     setBusy(true);
@@ -612,37 +526,6 @@ export default function Home() {
     const activeId = personalPhotos[imageIndex.current]?.id;
     try {
       await deletePhoto(id);
-      // Keep the card mounted until the confirmed deletion has animated out.
-      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      await element
-        .animate(
-          [
-            {
-              opacity: 1,
-              transform: 'translateY(0) scale(1)',
-              filter: 'blur(0px)',
-              offset: 0,
-            },
-            {
-              opacity: 1,
-              transform: 'translateY(-7px) scale(1.025)',
-              filter: 'blur(0px)',
-              offset: 0.2,
-            },
-            {
-              opacity: 0,
-              transform: 'translateY(36px) scale(.55)',
-              filter: 'blur(7px)',
-              offset: 1,
-            },
-          ],
-          {
-            duration: reduced ? 0 : 360,
-            easing: 'cubic-bezier(.4, 0, .7, 1)',
-            fill: 'forwards',
-          },
-        )
-        .finished.catch(() => {});
       const photos = await readPhotos();
       if (!alive.current) return;
       imageFiles.current = photos.map(photoFile);
@@ -718,7 +601,9 @@ export default function Home() {
       modal={false}
       disablePointerDismissal
     >
-      <main className={`lab ${panelOpen ? 'panel-open' : ''}`}>
+      <main
+        className={`lab ${panelOpen ? 'panel-open' : ''} ${galleryOpen ? 'gallery-active' : ''}`}
+      >
         <input
           ref={fileInput}
           type="file"
@@ -731,6 +616,8 @@ export default function Home() {
           }}
         />
         <SheetTrigger
+          tabIndex={galleryOpen ? -1 : 0}
+          aria-hidden={galleryOpen}
           render={
             <button
               className="glass icon modify"
@@ -741,6 +628,16 @@ export default function Home() {
         >
           <SlidersHorizontal size={19} />
         </SheetTrigger>
+        <button
+          ref={galleryClose}
+          className="glass icon gallery-dismiss"
+          aria-label="Close photo gallery"
+          aria-hidden={!galleryOpen}
+          tabIndex={galleryOpen ? 0 : -1}
+          onClick={closeGallery}
+        >
+          <X size={19} />
+        </button>
         <section
           className={`demo ${galleryOpen ? 'gallery-open' : ''}`}
           onDragOver={(e) => e.preventDefault()}
@@ -829,26 +726,37 @@ export default function Home() {
               <h2 id="personal-gallery-title">
                 Your photos <span>{fileCount}</span>
               </h2>
-              <button
-                ref={galleryClose}
-                className="glass icon"
-                aria-label="Close photo gallery"
-                onClick={closeGallery}
-              >
-                <X size={18} />
-              </button>
             </div>
             <div className="gallery-grid">
               {personalPhotos.map((photo, index) => (
-                <GalleryCard
+                <div
+                  className="gallery-card"
                   key={photo.id}
-                  photo={photo}
-                  index={index}
-                  open={galleryOpen}
-                  busy={busy}
-                  onChoose={() => void choosePersonalPhoto(index)}
-                  onRemove={(element) => void removePhoto(photo.id, element)}
-                />
+                  style={
+                    {
+                      '--card-delay': `${Math.min(index, 6) * 45}ms`,
+                      '--card-tilt': `${((index % 3) - 1) * 3}deg`,
+                    } as React.CSSProperties
+                  }
+                >
+                  <button
+                    className="gallery-pick"
+                    disabled={busy}
+                    aria-label={`Use ${photo.name}`}
+                    onClick={() => void choosePersonalPhoto(index)}
+                  >
+                    <GalleryPhoto photo={photo} open={galleryOpen} />
+                  </button>
+                  <button
+                    className="gallery-remove"
+                    disabled={busy}
+                    aria-label={`Remove ${photo.name}`}
+                    title="Remove photo"
+                    onClick={() => void removePhoto(photo.id)}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
               ))}
             </div>
           </section>

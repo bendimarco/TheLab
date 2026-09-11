@@ -71,14 +71,18 @@ canvas:focus-visible {
   height: 100%;
   touch-action: pan-y;
 }
-.modify {
+.modify,
+.gallery-dismiss {
   position: fixed;
   top: 12px;
   right: 12px;
   z-index: 40;
-  transition: right var(--panel-motion);
+  transition:
+    right var(--panel-motion),
+    opacity 200ms ease;
 }
-.panel-open .modify {
+.panel-open .modify,
+.panel-open .gallery-dismiss {
   right: calc(var(--panel-space) + 12px);
 }
 /* A nonmodal inspector: keep the demo interactive and undimmed. */
@@ -555,16 +559,13 @@ canvas:focus-visible {
 }
 .demo > canvas {
   opacity: 1;
-  filter: blur(0) saturate(1);
   transform: scale(1);
   transition:
-    opacity 450ms ease,
-    filter 450ms ease,
+    opacity 300ms ease,
     transform 450ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .demo.gallery-open > canvas {
-  opacity: 0.3;
-  filter: blur(12px) saturate(0.75);
+  opacity: 0;
   transform: scale(0.86);
   pointer-events: none;
 }
@@ -622,37 +623,27 @@ canvas:focus-visible {
   position: relative;
   aspect-ratio: 3 / 2;
   opacity: 0;
-  transform: translateY(90px) scale(0.65);
+  transform: translateY(90px) scale(0.65) rotate(10deg);
   transition:
     opacity 200ms ease,
     transform 300ms ease;
 }
 .gallery-open .gallery-card {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: translateY(0) scale(1) rotate(var(--card-tilt));
   transition:
     opacity 280ms ease var(--card-delay),
     transform 550ms cubic-bezier(0.18, 1.25, 0.35, 1) var(--card-delay);
 }
-.gallery-surface {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transform: perspective(750px) scale(1) rotateX(0) rotateY(0) rotateZ(0);
-  transition: transform 240ms cubic-bezier(0.2, 0.7, 0.3, 1);
-}
-@media (hover: hover) and (pointer: fine) {
-  .gallery-open .gallery-card:hover .gallery-surface {
-    transform: perspective(750px) scale(1.045) rotateX(var(--tilt-x, 0deg))
-      rotateY(var(--tilt-y, 0deg)) rotateZ(var(--tilt-z, 0deg));
-    transition-duration: 110ms;
-  }
+.gallery-open .gallery-card:hover,
+.gallery-open .gallery-card:focus-within {
+  transform: translateY(-4px) scale(1.02) rotate(0);
 }
 .gallery-pick {
   display: block;
   width: 100%;
   height: 100%;
-  padding: 2px;
+  padding: 5px;
   border: 0;
   border-radius: 14px;
   background: white;
@@ -666,42 +657,25 @@ canvas:focus-visible {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 10px;
 }
-.gallery-pick:disabled {
-  opacity: 1;
-}
-.gallery-remove.glass {
+.gallery-remove {
   position: absolute;
   right: -8px;
   top: -8px;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
-  min-height: 0;
+  width: 25px;
+  height: 25px;
   padding: 0;
-  border: 0.75px solid #ffffffb3;
+  border: 2px solid white;
   border-radius: 50%;
-  background: color-mix(
-    in srgb,
-    #ff3b30 calc(var(--delete-heat, 0) * 100%),
-    #f8f8fbe6
-  );
-  color: color-mix(in srgb, #fff calc(var(--delete-heat, 0) * 100%), #55565e);
-  backdrop-filter: blur(14px);
-  box-shadow:
-    0 2px 7px #20212620,
-    inset 0 1px 0 #ffffff70;
-  transition:
-    background-color 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease;
-}
-.gallery-remove.glass:hover,
-.gallery-remove.glass:focus-visible {
-  background: #ff3b30;
+  background: #292b32;
   color: white;
+  box-shadow: 0 2px 6px #0003;
+}
+.gallery-remove:hover {
+  background: #d33945;
 }
 .photo-notice {
   z-index: 4;
@@ -732,10 +706,25 @@ canvas:focus-visible {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .gallery-surface,
-  .gallery-open .gallery-card:hover .gallery-surface {
-    transform: none;
-    transition: none;
-  }
+.gallery-active .modify {
+  opacity: 0;
+  pointer-events: none;
+}
+.gallery-dismiss {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    right var(--panel-motion),
+    opacity 200ms ease,
+    visibility 0s 200ms;
+}
+.gallery-active .gallery-dismiss {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    right var(--panel-motion),
+    opacity 200ms ease,
+    visibility 0s;
 }
