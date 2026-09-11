@@ -408,3 +408,42 @@ canvas:focus-visible {
   opacity: 0.6;
   cursor: progress;
 }
+
+.alignment-control .range-label {
+  align-items: center;
+}
+.alignment-control .hint {
+  margin: 8px 0 0;
+}
+.alignment-switch[data-slot='switch'] {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  width: 36px;
+  height: 22px;
+  padding: 2px;
+  border: 1px solid #c4c6ce;
+  border-radius: 999px;
+  background: #d2d4dc;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+.alignment-switch[data-checked] {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.alignment-switch [data-slot='switch-thumb'] {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #0003;
+  translate: none;
+  transform: translateX(0);
+  transition: transform 180ms ease;
+}
+.alignment-switch[data-checked] [data-slot='switch-thumb'] {
+  transform: translateX(14px);
+}

@@ -708,6 +708,29 @@ export default function Home() {
               </div>
             </div>
             <div className="parameter-grid">
+              <div className="range alignment-control">
+                <div className="range-label">
+                  <label htmlFor="closed-image-alignment">
+                    Left-aligned closed image
+                  </label>
+                  <Switch
+                    id="closed-image-alignment"
+                    className="alignment-switch"
+                    checked={settings.closedImageAligned === 1}
+                    onCheckedChange={(checked) =>
+                      applySettings({
+                        ...settingsRef.current,
+                        closedImageAligned: checked ? 1 : 0,
+                      })
+                    }
+                  />
+                </div>
+                <p className="hint">
+                  {settings.closedImageAligned === 1
+                    ? 'Matches the image on the open right screen.'
+                    : 'Centers the image on the closed screen.'}
+                </p>
+              </div>
               <Range
                 label="Animation duration"
                 value={duration}
@@ -794,28 +817,6 @@ export default function Home() {
                   })
                 }
               />
-              <div className="range">
-                <div className="range-label">
-                  <label htmlFor="closed-image-alignment">
-                    Left-aligned closed image
-                  </label>
-                  <Switch
-                    id="closed-image-alignment"
-                    checked={settings.closedImageAligned === 1}
-                    onCheckedChange={(checked) =>
-                      applySettings({
-                        ...settingsRef.current,
-                        closedImageAligned: checked ? 1 : 0,
-                      })
-                    }
-                  />
-                </div>
-                <p className="hint">
-                  {settings.closedImageAligned === 1
-                    ? 'Matches the image on the open right screen.'
-                    : 'Centers the image on the closed screen.'}
-                </p>
-              </div>
             </div>
             <p className="hint">
               Drag to fold. Tap in landscape to open or close.
