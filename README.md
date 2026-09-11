@@ -95,3 +95,5 @@ Desktop video controls use a vertical stack of Play/Pause icons, speed, and a on
 Scrubbing pauses the video at the chosen frame; playback resumes only with Play. Transport icons use solid sharp-cornered triangle and bar shapes.
 
 Transport collision fading is updated directly on every shader draw, including click animations, release settling and the teaser, without rendering the React tree at animation cadence. Media-selection fading remains separate. Controls fade gradually across 74–30 px of clearance and disappear before overlap; Play/Pause and speed sit below the scrub line.
+
+The transport fade starts at 8% expansion and reaches zero at 60%, with smooth endpoint easing. This avoids concentrating the fade in the brief, fast-moving projected-edge sweep during automatic opening. The clearance bound remains a safety limit, and closing reverses the same progress curve.

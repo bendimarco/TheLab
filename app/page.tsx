@@ -184,13 +184,19 @@ function videoTransportLayout(
     }
   const transportLeft = Math.max(12, stageWidth / 2 + closedHinge - 120);
   const transportGap = projectedLeft - (transportLeft + 46);
-  const transportOpacity = ease(clamp((transportGap - 30) / 44));
+  // Distance collapses quickly during the rotating edge's sweep. Begin fading
+  // well before that sweep, over a broad expansion interval (also when scrubbing).
+  const expansionOpacity = 1 - ease(clamp((progress - 0.08) / 0.52));
+  const transportOpacity = Math.min(
+    expansionOpacity,
+    ease(clamp((transportGap - 30) / 44)),
+  );
 
   return {
     left: transportLeft,
     top: stageHeight / 2,
     opacity: transportOpacity,
-    visibility: transportGap <= 30 ? 'hidden' : 'visible',
+    visibility: transportOpacity <= 0 ? 'hidden' : 'visible',
   };
 }
 
