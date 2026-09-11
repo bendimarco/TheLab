@@ -35,7 +35,7 @@ uniform vec4 testPose;
 void main() {
   float h=500.0, w=h*.72, bezel=h*.028, camera=h*3.5;
   float angle=testPose.y; bool inside=testPose.x>.5;
-  float anchor=inside?0.0:bezel, faceZ=inside?0.0:h*.026;
+  float anchor=inside?0.0:bezel, faceZ=inside?0.0:h*.034;
   float px=mix(anchor,w-bezel,vUV.x);
   float ref=sin(angle)*anchor+cos(angle)*faceZ;
   float z=sin(angle)*px+cos(angle)*faceZ;

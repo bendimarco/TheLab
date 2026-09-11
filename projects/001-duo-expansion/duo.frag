@@ -129,7 +129,7 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
                      vec2(inside ? w - bezel : viewport.x, viewport.y);
     float x = saturate(localUV.x);
     float camera = h * 3.5;
-    float thickness = h * 0.026;
+    float thickness = h * 0.034;
     float c = cos(angle), s = sin(angle);
     float faceZ = inside ? 0.0 : thickness;
     float anchorX = inside ? 0.0 : bezel;
@@ -181,8 +181,8 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     // Using raw blurX for the diagonals made them much stronger near the crease.
     float spatialWeight = edgeRamp(blurX, u.frontProjection.w, u.frontEdge.x);
     float blur = max(0.0, u.frontProjection.z) * turn * creaseWeight * spatialWeight;
-    float dark = saturate(u.frontEdge.y) * turn *
-                 edgeRamp(x, u.frontEdge.z, u.frontEdge.w);
+    float dark = saturate(max(0.0, u.frontEdge.y) * turn *
+                 edgeRamp(x, u.frontEdge.z, u.frontEdge.w));
     // The image rectangle itself defines the top and bottom boundaries.
     // No independently derived triangle depth or shadow opacity is needed.
     float pictureEdgeDistance = min(imagePosition.y, imageViewport.y - imagePosition.y);
@@ -218,7 +218,7 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
 // The fixed screen is fully revealed at edge-on, rather than at the end of the fold.
 float rightRevealShade(float angle, float w, float h, float strength) {
     if (angle >= PI * 0.5) return 1.0;
-    float camera = h * 3.5, thickness = h * 0.026;
+    float camera = h * 3.5, thickness = h * 0.034;
     float c = cos(angle), s = sin(angle);
     float insideEdge = c * w * camera / (camera - s * w);
     float frontEdge = (c * w - s * thickness) * camera / (camera - s * w - c * thickness);
@@ -369,7 +369,10 @@ LeafHit roundLeafHit(LeafHit boundary, vec3 origin, vec3 ray, float w,
         }
         t += max(distance, epsilon) / rayLength;
     }
-    return LeafHit(1e8, vec3(0.0), vec3(0.0));
+    // At grazing corners, finite refinement can miss the rounded surface.
+    // Keep the analytic silver shell instead of exposing the black screen behind.
+    // Mid-depth marks this fallback as metal, never planar glass.
+    return LeafHit(boundary.t, vec3(boundary.p.xy, thickness * 0.5), boundary.normal);
 }
 
 // Materials follow the planar glass footprint, never a near-flat normal test.
@@ -380,7 +383,7 @@ bool isGlassFace(LeafHit hit, float w, float h, float thickness) {
     if (planeDistance > h * 0.0001) return false;
     // A small silver overlap hides numerical glass/bezel speckles at the lip.
     // Clamp only the hinge coordinate so this guard never paints the open seam.
-    float silverOverlap = h * 0.004;
+    float silverOverlap = h * 0.007;
     vec2 point = vec2(max(silverOverlap, hit.p.x), hit.p.y) - vec2(0.0, bevel);
     float footprint = panelDistance(point, vec2(w - bevel, h - 2.0 * bevel), h * 0.07 - bevel);
     return hit.p.x >= -h * 0.00001 && footprint <= -silverOverlap + h * 0.000001;
@@ -393,13 +396,13 @@ vec3 rimColor(LeafHit hit, float thickness, float c, float s) {
     float light = max(0.0, dot(normal, lightDirection));
     vec3 halfVector = normalize(lightDirection + vec3(0.0, 0.0, 1.0));
     float reflectedLight = max(0.0, dot(normal, halfVector));
-    float broadReflection = pow(reflectedLight, 10.0);
-    float highlight = pow(reflectedLight, 80.0);
+    float broadReflection = pow(reflectedLight, 18.0);
+    float highlight = pow(reflectedLight, 110.0);
     float grazing = pow(1.0 - abs(normal.z), 3.0);
     // Polished silver: a broad reflection under a brighter, narrower highlight.
     // Keep the ambient floor bright so shadowed corners never turn black.
     float metal = min(1.0, 0.57 + 0.16 * light + 0.12 * broadReflection +
-                           0.32 * highlight + 0.10 * grazing);
+                           0.42 * highlight + 0.10 * grazing);
     return vec3(metal * 0.98, metal * 0.995, metal);
 
 }
@@ -408,7 +411,7 @@ vec3 rimColor(LeafHit hit, float thickness, float c, float s) {
 vec4 shadeDuo(vec2 uv, DuoUniforms u, sampler2D photo) {
     float h = u.geometry.z;
     float w = h * 0.72;
-    float thickness = h * 0.026;
+    float thickness = h * 0.034;
     float camera = h * 3.5;
     float angle = clamp(u.geometry.w, 0.0, 1.0) * PI;
     float c = cos(angle), s = sin(angle);

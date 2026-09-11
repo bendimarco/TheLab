@@ -275,7 +275,7 @@ test('new sessions start with stronger blur and the captured curve', () => {
     diagonalBlurRadius: 65,
     creaseBlendWidth: 0,
     creaseBlurEasing: 3.1,
-    edgeDarkness: 0.98,
+    edgeDarkness: 1,
     rightScreenDarkness: 0.44,
     closedImageAligned: 0,
     blurCurveStartX: 1,
@@ -286,7 +286,12 @@ test('new sessions start with stronger blur and the captured curve', () => {
 });
 
 test('expanded blur ranges round-trip through saved versions', () => {
-  const settings = { ...defaults, blurRadius: 160, diagonalBlurRadius: 120 };
+  const settings = {
+    ...defaults,
+    blurRadius: 160,
+    diagonalBlurRadius: 120,
+    edgeDarkness: 2,
+  };
   assert.equal(validSettings(settings), true);
   const archive = addVersion(
     emptyArchive(),
@@ -299,6 +304,7 @@ test('expanded blur ranges round-trip through saved versions', () => {
     settings,
   );
   assert.equal(validSettings({ ...settings, blurRadius: 161 }), false);
+  assert.equal(validSettings({ ...settings, edgeDarkness: 2.01 }), false);
   assert.equal(validSettings({ ...settings, diagonalBlurRadius: 121 }), false);
 });
 

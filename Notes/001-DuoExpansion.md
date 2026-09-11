@@ -196,3 +196,9 @@ Diagonal blur formerly acquired a 30% floor as soon as the projected wedge grew 
 ### High-radius sampling
 
 The regular 5×5 gather could expose a square sampling pattern at large radii, compounded by coarse box-filtered mip levels. The gather now uses 25 fixed Gaussian-distributed disk samples, arranged as a center plus 12 opposite pairs. Opposite offsets preserve symmetric picture-boundary coverage, and static offsets avoid temporal noise. The prefilter footprint is reduced from 0.5 to 0.35 times the radius so coarse mip texels are less prominent. Sample count remains 25; no extra video processing pass is added.
+
+### Captured defaults and silver shell
+
+Captured the live local settings: progressive blur 75, diagonal blur 65, crease blend 0, crease easing 3.1, right-screen darkness 0.44, centered cover, and curve handles (1, 0), (1, 0.4869037828947368). Edge darkness defaults to strength 1 and now accepts up to 2; clamping happens after the angular/spatial weighting so the extended range has an effect without negative colors.
+
+The shell is now 0.034 times phone height (previously 0.026), with a 0.007-height silver overlap at the glass lip. Grazing corner refinement falls back to the analytic metal shell on non-convergence instead of exposing black surfaces through a missing intersection. A narrower, brighter highlight strengthens the polished metal appearance while retaining the bright ambient floor.
