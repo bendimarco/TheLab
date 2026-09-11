@@ -78,9 +78,8 @@ const { decodeURL } = await import(pathToFileURL(join(dir, 'media.mjs')));
 const { readPhotos, savePhotos, deletePhoto, photoFile } = await import(
   pathToFileURL(join(dir, 'photo-library.mjs'))
 );
-const { releaseTarget, settledProgress, nextRotationIndex } = await import(
-  pathToFileURL(join(dir, 'interaction.mjs'))
-);
+const { releaseTarget, settledProgress, nextRotationIndex, demoHeight } =
+  await import(pathToFileURL(join(dir, 'interaction.mjs')));
 const { decodeMedia, isVideo, videoCrop } = await import(
   pathToFileURL(join(dir, 'media.mjs'))
 );
@@ -758,6 +757,18 @@ test('release physics attract nearby endpoints, respect momentum and allow preci
   }
 });
 
+test('mobile cover is larger and smoothly fits the open spread', () => {
+  let previous = demoHeight(390, 700, 0, true);
+  assert.ok(previous > demoHeight(390, 700, 0, false) * 1.5);
+  for (let i = 1; i <= 100; i++) {
+    const height = demoHeight(390, 700, i / 100, true);
+    assert.ok(height <= previous && previous - height < 5);
+    previous = height;
+  }
+  assert.ok(previous * 1.44 < 390);
+  assert.equal(demoHeight(900, 700, 0, false), demoHeight(900, 700, 1, false));
+});
+
 test('video formats and portrait crops preserve the centered landscape window', () => {
   assert.equal(isVideo({ name: 'clip.MOV', type: '' }), true);
   assert.equal(isVideo({ name: 'clip', type: 'video/mp4' }), true);
@@ -891,13 +902,18 @@ test('video resource updates only new frames and pauses/releases its decoder and
     assert.equal(remote.kind, 'video');
     assert.equal(
       remote.textureSource,
-      video,
-      'bounded landscape video goes directly to WebGL',
+      remote.canvas,
+      'poster remains visible before the first presented video frame',
     );
     const posterDraws = draws.length;
     remote.start(() => updates++, assert.fail);
     await Promise.resolve();
     tick(150, 0.2);
+    assert.equal(
+      remote.textureSource,
+      video,
+      'switch to direct texture only after a frame',
+    );
     tick(190, 0.233);
     assert.equal(
       draws.length,
@@ -1073,7 +1089,13 @@ test('blocked playback resumes directly from a gesture and stale interruptions a
     videoWidth = 1280;
     videoHeight = 720;
     readyState = 2;
-    currentTime = 0;
+    duration = 4;
+    time = 0;
+    get currentTime() { return this.time; }
+    set currentTime(value) {
+      this.time = value;
+      queueMicrotask(() => this.dispatchEvent(new Event('seeked')));
+    }
     mode = 'blocked';
     load() {
       if (this.src)
@@ -1128,6 +1150,8 @@ test('blocked playback resumes directly from a gesture and stale interruptions a
     );
     await flush();
     assert.deepEqual(needed, [true]);
+    assert.equal(video.currentTime, 0, 'preview seek resets to the beginning');
+    assert.equal(media.textureSource, media.canvas, 'blocked playback retains a poster');
     assert.equal(errors.length, 0);
     video.mode = 'ok';
     const before = calls;

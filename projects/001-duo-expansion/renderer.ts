@@ -1,4 +1,4 @@
-import { settledProgress } from './interaction';
+import { settledProgress, demoHeight } from './interaction';
 import fragment from './duo.frag?raw';
 import {
   blurCurveTable,
@@ -33,6 +33,7 @@ export class DuoRenderer {
     done?: () => void;
   };
   private disposed = false;
+  private mobile = false;
   private width = 1;
   private height = 1;
   private mediaSize = [1, 1];
@@ -150,6 +151,11 @@ export class DuoRenderer {
   }
 
   resize(width: number, height: number) {
+    this.mobile =
+      window.innerWidth <= 600 ||
+      (typeof window.matchMedia === 'function' &&
+        window.matchMedia('(pointer: coarse)').matches &&
+        window.innerHeight <= 600);
     this.width = Math.max(1, width);
     this.height = Math.max(1, height);
     // Limit fill cost on Retina screens; logical coordinates keep blur in CSS px.
@@ -237,10 +243,7 @@ export class DuoRenderer {
         );
       gl.uniform4fv(this.uniforms.get(name)!, values);
     };
-    const h = Math.max(
-      1,
-      0.98 * Math.min((this.width - 48) / 1.44, (this.height - 40) / 1.26),
-    );
+    const h = demoHeight(this.width, this.height, this.progress, this.mobile);
     uniform('geometry', [this.width, this.height, h, this.progress]);
     uniform('media', [...this.mediaSize, this.white, s.closedImageAligned]);
     uniform('raster', [this.canvas.width, this.canvas.height, 0, 0]);

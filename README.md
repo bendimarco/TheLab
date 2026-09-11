@@ -81,3 +81,7 @@ Edge darkening displays a normalized 0–100% slider: the default 50% represents
 Animation duration defaults to 1.9 seconds; the Blur easing slider has been removed. The curve editor remains available, and saved shader versions retain their internal crease-easing value for compatibility. Right-screen darkness defaults to 50%.
 
 If local saving fails, new media remains usable for the current visit with an explicit temporary-storage notice. Temporary items can still be shuffled, added to, and removed; refreshing drops only those unsaved items. Existing persisted records are not cleared. New database records store media bytes and MIME types, while older Blob records remain readable. Uploads still stay entirely on the device.
+
+On phones, the folded demo starts larger and smoothly scales to fit its full open width. Horizontal drags can start anywhere on the free demo stage; pointer capture retains the gesture outside the phone, and horizontal intent stays locked despite vertical finger drift. The controls and gallery retain their own interactions.
+
+The drag instruction text and arrow are hidden on phones; the fold teaser remains. Blocked video playback shows the decoded poster while the Play video button waits for a user gesture.

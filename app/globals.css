@@ -908,3 +908,18 @@ canvas:focus-visible {
 .photo-notice.temporary-notice {
   color: #62646d;
 }
+
+/* Capture the whole free stage, including the margin below the canvas.
+   Native vertical panning must not cancel a slightly diagonal fold drag. */
+@media (pointer: coarse) {
+  .demo:not(.gallery-open),
+  .demo:not(.gallery-open) canvas {
+    touch-action: none;
+  }
+}
+
+@media (max-width: 600px), (pointer: coarse) and (max-height: 600px) {
+  .fold-hint {
+    display: none;
+  }
+}

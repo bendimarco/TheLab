@@ -236,6 +236,7 @@ export async function decodeMedia(
   };
   let draw = () => {};
   let directVideoTexture = false;
+  let hasPresentedFrame = false;
   const tick = (now: number, metadata?: VideoFrameCallbackMetadata) => {
     frame = 0;
     if (disposed || failed || paused || document.hidden) return;
@@ -253,6 +254,7 @@ export async function decodeMedia(
       now - lastUpload >= 1000 / 60 - 1
     ) {
       if (!directVideoTexture) draw();
+      hasPresentedFrame = true;
       lastTime = stamp;
       lastUpload = now;
       onFrame();
@@ -291,6 +293,31 @@ export async function decodeMedia(
     });
     if (!video.videoWidth || !video.videoHeight)
       throw new Error('This video has no usable dimensions.');
+    // Seek a small distance to force a decoded poster, instead of relying on
+    // loadeddata's initial frame (which can still be blank on some decoders).
+    if (Number.isFinite(video.duration) && video.duration > 0.05) {
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          clearTimeout(timeout);
+          video.removeEventListener('seeked', ready);
+          video.removeEventListener('error', failed);
+        };
+        const ready = () => {
+          cleanup();
+          resolve();
+        };
+        const failed = () => {
+          cleanup();
+          reject(
+            new Error('Could not decode a video preview. Try another video.'),
+          );
+        };
+        const timeout = setTimeout(failed, 5000);
+        video.addEventListener('seeked', ready);
+        video.addEventListener('error', failed);
+        video.currentTime = Math.min(0.1, video.duration / 2);
+      });
+    }
     const crop = videoCrop(video.videoWidth, video.videoHeight);
     const canvas = document.createElement('canvas');
     canvas.width = crop.width;
@@ -310,6 +337,7 @@ export async function decodeMedia(
         canvas.height,
       );
     draw();
+    if (video.currentTime > 0) video.currentTime = 0;
     // Uncropped, bounded videos (including our sample) can go straight to WebGL.
     // Larger/portrait uploads retain the bounded canvas path to preserve their crop.
     directVideoTexture =
@@ -318,7 +346,11 @@ export async function decodeMedia(
     video.addEventListener('error', runtimeError);
     return {
       canvas,
-      textureSource: directVideoTexture ? video : canvas,
+      get textureSource() {
+        // Until playback supplies a frame, use the stable poster even if the
+        // browser refuses autoplay. Do not upload a paused/unpresented video.
+        return directVideoTexture && hasPresentedFrame ? video : canvas;
+      },
       kind: 'video',
       start(update, error, needsPlay) {
         onNeedsPlay = needsPlay ?? (() => {});

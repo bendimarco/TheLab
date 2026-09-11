@@ -32,6 +32,7 @@ import {
 import { BlurCurve } from '@/projects/001-duo-expansion/BlurCurve';
 import {
   releaseTarget,
+  demoHeight,
   nextRotationIndex,
 } from '@/projects/001-duo-expansion/interaction';
 import { DuoRenderer } from '@/projects/001-duo-expansion/renderer';
@@ -419,10 +420,10 @@ export default function Home() {
     const resizeDemo = (width: number, height: number) => {
       renderer.current?.resize(width, height);
       // Match the renderer's closed cover size and perspective projection.
-      const phoneHeight = Math.max(
-        1,
-        0.98 * Math.min((width - 48) / 1.44, (height - 40) / 1.26),
-      );
+      const mobile =
+        window.innerWidth <= 600 ||
+        (matchMedia('(pointer: coarse)').matches && window.innerHeight <= 600);
+      const phoneHeight = demoHeight(width, height, 0, mobile);
       const rightEdge = width / 2 + (phoneHeight * 0.36 * 3.5) / (3.5 - 0.022);
       el.parentElement?.style.setProperty('--hint-left', `${rightEdge + 12}px`);
       el.parentElement?.style.setProperty('--hint-top', `${height / 2}px`);
@@ -960,6 +961,81 @@ export default function Home() {
         </button>
         <section
           className={`demo ${galleryOpen ? 'gallery-open' : ''}`}
+          onPointerDown={(e) => {
+            if (
+              !renderer.current ||
+              e.button !== 0 ||
+              galleryOpen ||
+              busy ||
+              pointer.current
+            )
+              return;
+            if (
+              (e.target as Element).closest(
+                'button, input, a, .demo-photo-tools, .personal-gallery',
+              )
+            )
+              return;
+            foldHint.current?.pause();
+            renderer.current.stop();
+            pointer.current = {
+              id: e.pointerId,
+              x: e.clientX,
+              y: e.clientY,
+              progress: renderer.current.progress,
+              moved: false,
+              dragged: false,
+              lastProgress: renderer.current.progress,
+              lastTime: e.timeStamp,
+              velocity: 0,
+            };
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            const p = pointer.current;
+            if (!p || p.id !== e.pointerId) return;
+            const dx = e.clientX - p.x;
+            if (Math.hypot(dx, e.clientY - p.y) > 5) p.moved = true;
+            if (
+              p.dragged ||
+              (Math.abs(dx) > 3 &&
+                Math.abs(dx) > Math.abs(e.clientY - p.y) * 0.5)
+            ) {
+              const next = clamp(
+                p.progress -
+                  dx / Math.max(140, e.currentTarget.clientWidth * 0.55),
+              );
+              const elapsed = e.timeStamp - p.lastTime;
+              if (elapsed > 0)
+                p.velocity = (next - p.lastProgress) / (elapsed / 1000);
+              p.lastProgress = next;
+              p.lastTime = e.timeStamp;
+              p.dragged = true;
+              scrub(next);
+            }
+          }}
+          onPointerUp={(e) => {
+            const p = pointer.current;
+            if (!p || p.id !== e.pointerId) return;
+            pointer.current = null;
+            if (e.currentTarget.hasPointerCapture(e.pointerId))
+              e.currentTarget.releasePointerCapture(e.pointerId);
+            if (!p.moved && window.innerWidth > window.innerHeight)
+              animate((renderer.current?.progress ?? 0) >= 0.5 ? 0 : 1);
+            else {
+              if (p.dragged)
+                settle(e.timeStamp - p.lastTime < 100 ? p.velocity : 0);
+              if (!busy && !galleryOpen && !panelOpen)
+                foldHint.current?.resume();
+            }
+          }}
+          onPointerCancel={(e) => {
+            if (pointer.current?.id !== e.pointerId) return;
+            const dragged = pointer.current.dragged;
+            pointer.current = null;
+            if (dragged) settle(0);
+            if (!busy && !galleryOpen && !panelOpen) foldHint.current?.resume();
+          }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
@@ -992,62 +1068,6 @@ export default function Home() {
                         : clamp(p + (e.key === 'ArrowRight' ? 0.025 : -0.025)),
                   );
               }
-            }}
-            onPointerDown={(e) => {
-              if (!renderer.current || e.button !== 0) return;
-              foldHint.current?.pause();
-              renderer.current.stop();
-              pointer.current = {
-                id: e.pointerId,
-                x: e.clientX,
-                y: e.clientY,
-                progress: renderer.current.progress,
-                moved: false,
-                dragged: false,
-                lastProgress: renderer.current.progress,
-                lastTime: e.timeStamp,
-                velocity: 0,
-              };
-              e.currentTarget.setPointerCapture(e.pointerId);
-            }}
-            onPointerMove={(e) => {
-              const p = pointer.current;
-              if (!p || p.id !== e.pointerId) return;
-              const dx = e.clientX - p.x;
-              if (Math.hypot(dx, e.clientY - p.y) > 5) p.moved = true;
-              if (p.moved && Math.abs(dx) > Math.abs(e.clientY - p.y)) {
-                const next = clamp(
-                  p.progress -
-                    dx / Math.max(140, e.currentTarget.clientWidth * 0.55),
-                );
-                const elapsed = e.timeStamp - p.lastTime;
-                if (elapsed > 0)
-                  p.velocity = (next - p.lastProgress) / (elapsed / 1000);
-                p.lastProgress = next;
-                p.lastTime = e.timeStamp;
-                p.dragged = true;
-                scrub(next);
-              }
-            }}
-            onPointerUp={(e) => {
-              const p = pointer.current;
-              if (!p || p.id !== e.pointerId) return;
-              pointer.current = null;
-              if (e.currentTarget.hasPointerCapture(e.pointerId))
-                e.currentTarget.releasePointerCapture(e.pointerId);
-              if (!p.moved && window.innerWidth > window.innerHeight)
-                animate((renderer.current?.progress ?? 0) >= 0.5 ? 0 : 1);
-              else {
-                if (p.dragged)
-                  settle(e.timeStamp - p.lastTime < 100 ? p.velocity : 0);
-                if (!busy && !galleryOpen && !panelOpen)
-                  foldHint.current?.resume();
-              }
-            }}
-            onPointerCancel={() => {
-              pointer.current = null;
-              if (!busy && !galleryOpen && !panelOpen)
-                foldHint.current?.resume();
             }}
           />
           <div

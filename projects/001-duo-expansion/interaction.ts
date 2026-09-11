@@ -45,3 +45,19 @@ export function nextRotationIndex(
     )
   ];
 }
+
+// Mobile starts with a larger cover, then makes room for the full two-panel span.
+export function demoHeight(
+  width: number,
+  height: number,
+  progress: number,
+  mobile: boolean,
+) {
+  const p = Math.max(0, Math.min(1, progress));
+  const unfold = p * p * (3 - 2 * p);
+  const span = mobile ? 0.9 + 0.54 * unfold : 1.44;
+  return Math.max(
+    1,
+    0.98 * Math.min((width - (mobile ? 20 : 48)) / span, (height - 40) / 1.26),
+  );
+}
