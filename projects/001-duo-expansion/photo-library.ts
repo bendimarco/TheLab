@@ -7,6 +7,10 @@ export type LocalPhoto = {
   poster?: string;
   addedAt: number;
 };
+type StoredPhoto = Omit<LocalPhoto, 'blob'> & {
+  blob: Blob | ArrayBuffer;
+  mimeType?: string;
+};
 const DATABASE = 'lab.personal-photos';
 const STORE = 'photos';
 function openLibrary(): Promise<IDBDatabase> {
@@ -29,9 +33,17 @@ export async function readPhotos(): Promise<LocalPhoto[]> {
       const request = transaction.objectStore(STORE).getAll();
       transaction.oncomplete = () =>
         resolve(
-          (request.result as LocalPhoto[]).sort(
-            (a, b) => a.addedAt - b.addedAt,
-          ),
+          (request.result as StoredPhoto[])
+            .map((photo) => ({
+              ...photo,
+              blob:
+                photo.blob instanceof Blob
+                  ? photo.blob
+                  : new Blob([photo.blob], {
+                      type: photo.mimeType || 'application/octet-stream',
+                    }),
+            }))
+            .sort((a, b) => a.addedAt - b.addedAt),
         );
       transaction.onabort = () => reject(transaction.error);
       transaction.onerror = () => reject(transaction.error);
@@ -41,11 +53,25 @@ export async function readPhotos(): Promise<LocalPhoto[]> {
   }
 }
 export async function savePhotos(photos: LocalPhoto[]): Promise<void> {
+  // Materialize bytes before starting the transaction. Safari can fail to persist
+  // file-backed Blobs; awaiting inside a transaction would also let it go inactive.
+  const records: StoredPhoto[] = [];
+  for (const photo of photos)
+    records.push({
+      ...photo,
+      blob: await photo.blob.arrayBuffer(),
+      mimeType: photo.blob.type,
+    });
   const db = await openLibrary();
   try {
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction(STORE, 'readwrite');
-      for (const photo of photos) transaction.objectStore(STORE).put(photo);
+      try {
+        for (const photo of records) transaction.objectStore(STORE).put(photo);
+      } catch (error) {
+        transaction.abort();
+        reject(error);
+      }
       // Only report success after the entire batch is committed (including quota checks).
       transaction.oncomplete = () => resolve();
       transaction.onabort = () => reject(transaction.error);

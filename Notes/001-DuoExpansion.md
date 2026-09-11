@@ -212,3 +212,9 @@ The corner-cylinder intersection now uses the closest-approach form instead of s
 The border proportions were subsequently slimmed: black bezel 0.024 of height (down from 0.034), metal depth 0.022 (down from 0.026), and silver overlap 0.0015. The stable entry-facing corner intersections and metal fallback remain unchanged.
 
 The silver material now reflects two studio light strips with stronger light/dark contrast and a cool silver tint. Their edges are softened to avoid razor-thin glints during rotation. The material retains a 0.4 brightness floor; rim geometry and thickness are unchanged.
+
+### Local media persistence on Safari
+
+A generic upload banner previously treated every database write failure as full/unavailable storage and prevented playback. New records materialize media as ArrayBuffer plus MIME type before opening a write transaction, avoiding direct persistence of file-backed Blob objects. Legacy Blob records remain readable; video bytes are not transcoded. A synchronous write failure explicitly aborts the batch so earlier queued writes cannot partially commit. Persistence failure now falls back to a clearly labeled in-memory rotation for that visit, preserving existing saved records.
+
+The screenshot alone does not identify quota exhaustion versus a Safari database failure. WebKit has documented both [Blob persistence failures](https://bugs.webkit.org/show_bug.cgi?id=188438) and [lost database connections](https://bugs.webkit.org/show_bug.cgi?id=273827); these reports motivate defensive handling, not a confirmed diagnosis of this device. Real quota exhaustion still cannot be bypassed by a storage format change.

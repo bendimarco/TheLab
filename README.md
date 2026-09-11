@@ -79,3 +79,5 @@ Bounded landscape videos, including the bundled sample, upload directly from the
 Edge darkening displays a normalized 0–100% slider: the default 50% represents internal strength 1, and 100% represents strength 2. Existing saved values preserve their rendering strength under the new labels.
 
 Animation duration defaults to 1.9 seconds; the Blur easing slider has been removed. The curve editor remains available, and saved shader versions retain their internal crease-easing value for compatibility. Right-screen darkness defaults to 50%.
+
+If local saving fails, new media remains usable for the current visit with an explicit temporary-storage notice. Temporary items can still be shuffled, added to, and removed; refreshing drops only those unsaved items. Existing persisted records are not cleared. New database records store media bytes and MIME types, while older Blob records remain readable. Uploads still stay entirely on the device.

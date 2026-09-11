@@ -193,6 +193,8 @@ export default function Home() {
   const [videoNeedsPlay, setVideoNeedsPlay] = useState(false);
   const [renderError, setRenderError] = useState('');
   const [status, setStatus] = useState('');
+  const temporaryPhotos = useRef(new Set<string>());
+  const [temporaryNotice, setTemporaryNotice] = useState('');
   const [busy, setBusy] = useState(true);
   const [personalPhotos, setPersonalPhotos] = useState<LocalPhoto[]>([]);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -775,12 +777,16 @@ export default function Home() {
         );
       try {
         await savePhotos(prepared);
-      } catch {
-        throw new Error(
-          'Could not save these files on this device. Browser storage may be full or unavailable. Your existing rotation is unchanged.',
+      } catch (storageError) {
+        console.warn('Local media storage failed:', storageError);
+        for (const photo of prepared) temporaryPhotos.current.add(photo.id);
+        setTemporaryNotice(
+          'These uploads are available for this visit only. This browser could not save them; refreshing will remove them. Your previously saved photos are safe.',
         );
       }
-      const photos = await readPhotos();
+      // Preserve temporary uploads too; a second database read could fail after
+      // a successful write and must not prevent using the prepared media.
+      const photos = [...personalPhotos, ...prepared];
       if (!alive.current) return;
       imageFiles.current = photos.map(photoFile);
       setFileCount(photos.length);
@@ -795,7 +801,7 @@ export default function Home() {
       );
       if (skipped.length)
         setError(
-          `${skipped.length} ${skipped.length === 1 ? 'file could' : 'files could'} not be opened. The other files were saved.`,
+          `${skipped.length} ${skipped.length === 1 ? 'file could' : 'files could'} not be opened. The other files were added.`,
         );
     } catch (e) {
       if (alive.current) setError(message(e));
@@ -811,8 +817,10 @@ export default function Home() {
     setError('');
     const activeId = personalPhotos[imageIndex.current]?.id;
     try {
-      await deletePhoto(id);
-      const photos = await readPhotos();
+      if (!temporaryPhotos.current.has(id)) await deletePhoto(id);
+      temporaryPhotos.current.delete(id);
+      if (!temporaryPhotos.current.size) setTemporaryNotice('');
+      const photos = personalPhotos.filter((photo) => photo.id !== id);
       if (!alive.current) return;
       const slot = Array.from(
         galleryGrid.current?.querySelectorAll<HTMLElement>('[data-photo-id]') ??
@@ -1192,6 +1200,11 @@ export default function Home() {
               </button>
             )}
           </div>
+          {temporaryNotice && !error && (
+            <p role="status" className="photo-notice temporary-notice">
+              {temporaryNotice}
+            </p>
+          )}
           {error && (
             <p className="photo-notice" role="alert">
               {error}

@@ -1,5 +1,5 @@
 import { test } from 'node:test';
-import { IDBFactory } from 'fake-indexeddb';
+import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
 import assert from 'node:assert/strict';
 import ts from 'typescript';
 import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
@@ -461,6 +461,44 @@ test('closed-image alignment persists and older versions remain centered', () =>
   );
   assert.deepEqual(parseArchive(JSON.stringify(aligned)), aligned);
   assert.equal(validSettings({ ...defaults, closedImageAligned: 0.5 }), false);
+});
+
+test('media storage uses bytes and rolls back a synchronously rejected batch', async () => {
+  const previous = globalThis.indexedDB;
+  const originalPut = IDBObjectStore.prototype.put;
+  globalThis.indexedDB = new IDBFactory();
+  const first = {
+    id: 'safe',
+    name: 'photo.jpg',
+    blob: new Blob(['original'], { type: 'image/jpeg' }),
+    thumbnail: '',
+    addedAt: 1,
+  };
+  try {
+    await savePhotos([first]);
+    IDBObjectStore.prototype.put = function (value) {
+      assert.ok(value.blob instanceof ArrayBuffer);
+      if (value.id === 'fail')
+        throw new DOMException('simulated quota', 'QuotaExceededError');
+      return originalPut.call(this, value);
+    };
+    await assert.rejects(
+      savePhotos([
+        { ...first, id: 'new' },
+        { ...first, id: 'fail' },
+      ]),
+      { name: 'QuotaExceededError' },
+    );
+    const photos = await readPhotos();
+    assert.deepEqual(
+      photos.map((p) => p.id),
+      ['safe'],
+    );
+    assert.equal(await photos[0].blob.text(), 'original');
+  } finally {
+    IDBObjectStore.prototype.put = originalPut;
+    globalThis.indexedDB = previous;
+  }
 });
 
 test('personal rotation persists blobs across connections and appends instead of replacing', async () => {

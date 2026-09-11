@@ -904,3 +904,7 @@ canvas:focus-visible {
 .video-play {
   color: #007aff;
 }
+
+.photo-notice.temporary-notice {
+  color: #62646d;
+}
