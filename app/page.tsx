@@ -899,10 +899,11 @@ export default function Home() {
             </button>
             <button
               className="glass photo-upload"
+              aria-busy={busy}
               disabled={busy}
               onClick={() => fileInput.current?.click()}
             >
-              <Upload size={18} /> {busy ? 'Opening…' : 'Add photos'}
+              <Upload size={18} /> Add photos
             </button>
             {fileCount > 0 && (
               <button
@@ -1224,11 +1225,12 @@ export default function Home() {
             <div className="media-actions">
               <button
                 className="glass upload"
+                aria-busy={busy}
                 disabled={busy}
                 onClick={() => fileInput.current?.click()}
               >
                 <Upload size={17} />
-                {busy ? 'Opening image…' : 'Upload images'}
+                Upload images
               </button>
               <button
                 className="text-button"

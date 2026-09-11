@@ -771,3 +771,14 @@ canvas:focus-visible {
     transition: none;
   }
 }
+
+.photo-upload,
+.upload {
+  transition: opacity 200ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .photo-upload,
+  .upload {
+    transition: none;
+  }
+}
