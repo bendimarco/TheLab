@@ -192,7 +192,7 @@ export class DuoRenderer {
     };
     const h = Math.max(
       1,
-      0.94 * Math.min((this.width - 48) / 1.44, (this.height - 40) / 1.26),
+      0.98 * Math.min((this.width - 48) / 1.44, (this.height - 40) / 1.26),
     );
     uniform('geometry', [this.width, this.height, h, this.progress]);
     uniform('media', [...this.mediaSize, this.white, s.closedImageAligned]);
