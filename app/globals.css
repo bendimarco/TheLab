@@ -985,18 +985,17 @@ canvas:focus-visible {
 .video-scrub-head {
   position: absolute;
   left: 50%;
-  width: 7px;
-  height: 7px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: #85858f;
   opacity: var(--proximity);
-  transform: translate(-50%, -50%) scale(calc(0.55 + 0.45 * var(--proximity)));
+  transform: translate(-50%, -50%) scale(var(--proximity));
   transition:
     opacity 280ms ease-in-out,
     transform 280ms ease-in-out;
   pointer-events: none;
 }
-.video-scrubber:has(input:focus-visible),
 .video-scrubber:active {
   --proximity: 1 !important;
 }
@@ -1024,4 +1023,11 @@ canvas:focus-visible {
   }
 }
 
-.video-scrubber input:active { cursor: grabbing; }
+.video-scrubber input:active {
+  cursor: grabbing;
+}
+
+.video-scrubber:has(input:focus-visible) .video-scrub-line {
+  outline: 1px solid #92929a;
+  outline-offset: 3px;
+}
