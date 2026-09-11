@@ -867,16 +867,16 @@ export default function Home() {
                       >
                         <GalleryPhoto photo={photo} open={galleryOpen} />
                       </button>
-                      <button
-                        className="glass gallery-remove"
-                        disabled={busy}
-                        aria-label={`Remove ${photo.name}`}
-                        title="Remove photo"
-                        onClick={() => void removePhoto(photo.id)}
-                      >
-                        <X size={13} />
-                      </button>
                     </div>
+                    <button
+                      className="glass gallery-remove"
+                      disabled={busy}
+                      aria-label={`Remove ${photo.name}`}
+                      title="Remove photo"
+                      onClick={() => void removePhoto(photo.id)}
+                    >
+                      <X size={13} />
+                    </button>
                   </div>
                 </div>
               ))}

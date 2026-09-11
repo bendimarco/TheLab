@@ -685,6 +685,7 @@ canvas:focus-visible {
 }
 .gallery-remove.glass {
   position: absolute;
+  z-index: 1;
   right: -8px;
   top: -8px;
   display: grid;
