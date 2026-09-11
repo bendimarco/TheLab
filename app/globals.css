@@ -412,9 +412,6 @@ canvas:focus-visible {
 .alignment-control .range-label {
   align-items: center;
 }
-.alignment-control .hint {
-  margin: 8px 0 0;
-}
 .alignment-switch[data-slot='switch'] {
   position: relative;
   display: inline-flex;
