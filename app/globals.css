@@ -923,71 +923,105 @@ canvas:focus-visible {
   }
 }
 
-/* Quiet video transport, separate from fold gestures and media library actions. */
+/* Desktop transport stays mounted so selection changes can fade both ways. */
 .video-controls {
   position: absolute;
   z-index: 3;
-  width: 80px;
+  width: 40px;
   transform: translateY(-50%);
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: #85858d;
-  font-size: 12px;
+  font-size: 11px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 320ms ease,
+    visibility 0s linear 320ms;
+}
+.video-controls.visible {
+  opacity: var(--transport-opacity, 1);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 400ms ease,
+    visibility 0s;
 }
 .video-controls button {
-  min-height: 32px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 28px;
   padding: 0;
   background: none;
   border: 0;
   color: inherit;
-  text-align: left;
   transition: color 180ms ease;
 }
 .video-controls button:hover {
-  color: #323238;
+  color: #46464e;
 }
-.video-controls input {
-  grid-column: 1 / -1;
-  width: 80px;
-  height: 18px;
+.video-scrubber {
+  --proximity: 0;
+  position: relative;
+  width: 52px;
+  height: 148px;
+}
+.video-scrub-line {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 50%;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    #888891 0 var(--watched),
+    #d3d3d8 var(--watched) 100%
+  );
+}
+.video-scrub-head {
+  position: absolute;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #85858f;
+  opacity: var(--proximity);
+  transform: translate(-50%, -50%) scale(calc(0.55 + 0.45 * var(--proximity)));
+  transition:
+    opacity 280ms ease-in-out,
+    transform 280ms ease-in-out;
+  pointer-events: none;
+}
+.video-scrubber:has(input:focus-visible),
+.video-scrubber:active {
+  --proximity: 1 !important;
+}
+.video-scrubber input {
+  position: absolute;
+  inset: 0;
+  width: 52px;
+  height: 148px;
   margin: 0;
-  accent-color: #92929a;
-  cursor: ew-resize;
+  writing-mode: vertical-lr;
+  direction: ltr;
+  opacity: 0;
+  cursor: grab;
 }
 @media (max-width: 600px), (pointer: coarse) {
   .video-controls {
     display: none;
   }
 }
-.video-controls input {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
+@media (prefers-reduced-motion: reduce) {
+  .video-controls,
+  .video-controls.visible,
+  .video-scrub-head {
+    transition: none;
+  }
 }
-.video-controls input::-webkit-slider-runnable-track {
-  height: 2px;
-  border-radius: 2px;
-  background: #bcbcc3;
-}
-.video-controls input::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 7px;
-  height: 7px;
-  margin-top: -2.5px;
-  border-radius: 50%;
-  background: #92929a;
-}
-.video-controls input::-moz-range-track {
-  height: 2px;
-  background: #bcbcc3;
-}
-.video-controls input::-moz-range-thumb {
-  width: 7px;
-  height: 7px;
-  border: 0;
-  border-radius: 50%;
-  background: #92929a;
-}
+
+.video-scrubber input:active { cursor: grabbing; }

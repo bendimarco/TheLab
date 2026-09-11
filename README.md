@@ -89,3 +89,5 @@ On phones, the folded demo starts larger and smoothly scales to fit its full ope
 The drag instruction text and arrow are hidden on phones; the fold teaser remains. Blocked video playback shows the decoded poster while the Play video button waits for a user gesture.
 
 Video transport is desktop-only: quiet Play/Pause and 1×/0.5× text to the left of the phone, plus a small scrubber. Seeking refreshes the shader even while paused. Mobile attempts muted playback and retries blocked playback on the next demo gesture without extra transport controls. Older uploaded-video previews are regenerated once from their local originals and stored as JPEG previews; media bytes remain unchanged.
+
+Desktop video controls use a vertical stack of Play/Pause icons, speed, and a one-pixel vertical scrubber. Watched content is dark grey; the remainder is light grey. The small thumb fades and grows with a 280 ms ease-in-out when the pointer is within 40 px (also visible for keyboard focus). Controls fade on media changes and as the projected fold approaches them; their collision bound uses the shader's camera, hinge, rotation and slab thickness. Mobile controls remain hidden.

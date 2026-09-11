@@ -10,6 +10,7 @@ import {
 import {
   Plus,
   Play,
+  Pause,
   History,
   Trash2,
   Upload,
@@ -964,6 +965,36 @@ export default function Home() {
     }
   }
 
+  // Project the rotating slab's corners with the shader's camera and hinge.
+  // A conservative bound fades controls before any part of the rim reaches them.
+  const stageWidth = canvas.current?.clientWidth ?? 1;
+  const stageHeight = canvas.current?.clientHeight ?? 1;
+  const phoneHeight = demoHeight(stageWidth, stageHeight, progress, false);
+  const panelWidth = phoneHeight * 0.72;
+  const depth = phoneHeight * 0.022;
+  const cameraDistance = phoneHeight * 3.5;
+  const closedHinge =
+    (-panelWidth * 0.5 * cameraDistance) / (cameraDistance - depth);
+  const hinge = closedHinge * (1 - ease(progress));
+  const angle = progress * Math.PI;
+  let projectedLeft = stageWidth / 2 + hinge;
+  for (const x of [0, panelWidth])
+    for (const z of [0, depth]) {
+      const worldX = Math.cos(angle) * x - Math.sin(angle) * z;
+      const worldZ = Math.sin(angle) * x + Math.cos(angle) * z;
+      projectedLeft = Math.min(
+        projectedLeft,
+        stageWidth / 2 +
+          hinge +
+          (worldX * cameraDistance) / (cameraDistance - worldZ),
+      );
+    }
+  const transportLeft = Math.max(12, stageWidth / 2 + closedHinge - 120);
+  const transportGap = projectedLeft - (transportLeft + 46);
+  const transportOpacity = ease(clamp((transportGap - 16) / 48));
+  const transportVisible =
+    videoActive && !galleryOpen && !busy && transportOpacity > 0;
+
   return (
     <Sheet
       open={panelOpen}
@@ -1190,57 +1221,93 @@ export default function Home() {
               ))}
             </div>
           </section>
-          {videoActive && !galleryOpen && (
-            <div
-              className="video-controls"
-              aria-label="Video controls"
-              style={{
-                left: Math.max(
-                  12,
-                  (canvas.current?.clientWidth ?? 0) / 2 -
-                    demoHeight(
-                      canvas.current?.clientWidth ?? 1,
-                      canvas.current?.clientHeight ?? 1,
-                      progress,
-                      false,
-                    ) *
-                      (0.36 + 0.36 * ease(progress)) -
-                    96,
-                ),
-                top: (canvas.current?.clientHeight ?? 0) / 2,
+          <div
+            className={`video-controls ${transportVisible ? 'visible' : ''}`}
+            aria-label="Video controls"
+            aria-hidden={!transportVisible}
+            inert={!transportVisible}
+            style={
+              {
+                left: transportLeft,
+                top: stageHeight / 2,
+                '--transport-opacity': transportOpacity,
+                visibility: transportGap <= 8 ? 'hidden' : undefined,
+              } as React.CSSProperties
+            }
+          >
+            <button
+              disabled={busy}
+              aria-label={
+                videoNeedsPlay || videoPaused || videoState.paused
+                  ? 'Play video'
+                  : 'Pause video'
+              }
+              onClick={() => {
+                const media = currentMedia.current;
+                if (!media) return;
+                const shouldPlay =
+                  videoNeedsPlay || videoPaused || media.playback?.().paused;
+                setVideoPaused(!shouldPlay);
+                media.setPaused(!shouldPlay);
+                if (shouldPlay) media.resume();
+                const state = media.playback?.();
+                if (state) setVideoState(state);
               }}
             >
-              <button
-                disabled={busy}
-                onClick={() => {
-                  const media = currentMedia.current;
-                  if (!media) return;
-                  const shouldPlay =
-                    videoNeedsPlay || videoPaused || media.playback?.().paused;
-                  setVideoPaused(!shouldPlay);
-                  media.setPaused(!shouldPlay);
-                  if (shouldPlay) media.resume();
-                  const state = media.playback?.();
-                  if (state) setVideoState(state);
+              {videoNeedsPlay || videoPaused || videoState.paused ? (
+                <Play size={15} fill="currentColor" strokeWidth={1.5} />
+              ) : (
+                <Pause size={15} fill="currentColor" strokeWidth={1.5} />
+              )}
+            </button>
+            <button
+              aria-label="Toggle video speed"
+              onClick={() => {
+                const rate = videoState.rate === 1 ? 0.5 : 1;
+                currentMedia.current?.setRate?.(rate);
+                setVideoState((state) => ({ ...state, rate }));
+              }}
+            >
+              {videoState.rate}×
+            </button>
+            <div
+              className="video-scrubber"
+              style={
+                {
+                  '--watched': `${Math.min(1, videoState.time / (videoState.duration || 1)) * 100}%`,
+                } as React.CSSProperties
+              }
+              onPointerMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const fraction = Math.min(
+                  1,
+                  videoState.time / (videoState.duration || 1),
+                );
+                const distance = Math.hypot(
+                  e.clientX - (rect.left + rect.width / 2),
+                  e.clientY - (rect.top + 4 + fraction * (rect.height - 8)),
+                );
+                e.currentTarget.style.setProperty(
+                  '--proximity',
+                  distance < 40 ? '1' : '0',
+                );
+              }}
+              onPointerLeave={(e) =>
+                e.currentTarget.style.setProperty('--proximity', '0')
+              }
+            >
+              <span className="video-scrub-line" aria-hidden="true" />
+              <span
+                className="video-scrub-head"
+                aria-hidden="true"
+                style={{
+                  top: `calc(${Math.min(1, videoState.time / (videoState.duration || 1)) * 100}% + ${4 - 8 * Math.min(1, videoState.time / (videoState.duration || 1))}px)`,
                 }}
-              >
-                {videoNeedsPlay || videoPaused || videoState.paused
-                  ? 'Play'
-                  : 'Pause'}
-              </button>
-              <button
-                aria-label="Toggle video speed"
-                onClick={() => {
-                  const rate = videoState.rate === 1 ? 0.5 : 1;
-                  currentMedia.current?.setRate?.(rate);
-                  setVideoState((state) => ({ ...state, rate }));
-                }}
-              >
-                {videoState.rate}×
-              </button>
+              />
               <input
                 type="range"
                 aria-label="Scrub video"
+                aria-orientation="vertical"
                 min="0"
                 max={videoState.duration || 1}
                 step="0.01"
@@ -1253,7 +1320,7 @@ export default function Home() {
                 }}
               />
             </div>
-          )}
+          </div>
           <div ref={photoTools} className="demo-photo-tools">
             <button
               className="glass shuffle"
