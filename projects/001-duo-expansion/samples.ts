@@ -1,5 +1,12 @@
 export const samplePhotos = [
   {
+    id: 'p1001338',
+    label: 'Dog',
+    kind: 'image' as const,
+    src: '/photos/italy/p1001338.jpg',
+    thumbnail: '/photos/italy/p1001338-thumb.jpg',
+  },
+  {
     id: 'p1001308',
     label: 'Italy video',
     kind: 'video' as const,
@@ -7,7 +14,6 @@ export const samplePhotos = [
     thumbnail: '/photos/italy/p1001308-thumb.jpg',
   },
   ...[
-    { id: 'p1001338', label: 'Dog' },
     { id: 'p1011479', label: 'Lake' },
     { id: 'p1001168', label: 'Friend' },
   ].map((photo) => ({

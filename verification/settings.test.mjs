@@ -651,12 +651,12 @@ test('fold guidance waits for idle, repeats every four seconds, and never return
   }
 });
 
-test('sample collection starts with video, then dog, lake and friend', () => {
-  assert.equal(defaultPhoto.id, 'p1001308');
-  assert.equal(defaultPhoto.kind, 'video');
+test('sample collection starts with dog, then video, lake and friend', () => {
+  assert.equal(defaultPhoto.id, 'p1001338');
+  assert.equal(defaultPhoto.kind, 'image');
   assert.deepEqual(
     samplePhotos.map((p) => p.label),
-    ['Italy video', 'Dog', 'Lake', 'Friend'],
+    ['Dog', 'Italy video', 'Lake', 'Friend'],
   );
 });
 
@@ -925,7 +925,7 @@ test('phones and motion/data preferences avoid automatic video loads and shuffle
   assert.equal(defaultSampleIndex(false), 0);
   assert.equal(samplePhotos[defaultSampleIndex(true)].id, 'p1001338');
   assert.deepEqual(shuffleSampleIndices(false), [0, 1, 2, 3]);
-  assert.deepEqual(shuffleSampleIndices(true), [1, 2, 3]);
+  assert.deepEqual(shuffleSampleIndices(true), [0, 2, 3]);
   assert.ok(
     shuffleSampleIndices(true).every(
       (index) => samplePhotos[index].kind === 'image',

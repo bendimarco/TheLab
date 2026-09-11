@@ -1351,33 +1351,6 @@ export default function Home() {
                   />
                 </div>
               </div>
-              <div className="range alignment-control">
-                <div className="range-label">
-                  <label htmlFor="closed-image-alignment">
-                    Closed image:{' '}
-                    {settings.closedImageAligned === 1
-                      ? 'Left aligned'
-                      : 'Center aligned'}
-                  </label>
-                  <Switch
-                    id="closed-image-alignment"
-                    className="alignment-switch"
-                    aria-label="Left-align closed image"
-                    title={
-                      settings.closedImageAligned === 1
-                        ? 'Switch to center alignment'
-                        : 'Switch to left alignment'
-                    }
-                    checked={settings.closedImageAligned === 1}
-                    onCheckedChange={(checked) =>
-                      applySettings({
-                        ...settingsRef.current,
-                        closedImageAligned: checked ? 1 : 0,
-                      })
-                    }
-                  />
-                </div>
-              </div>
               <Range
                 label="Animation duration"
                 value={duration}
