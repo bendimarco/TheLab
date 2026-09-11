@@ -1398,7 +1398,7 @@ export default function Home() {
               <Range
                 label="Progressive blur"
                 value={settings.blurRadius}
-                max={80}
+                max={ranges.blurRadius[1]}
                 step={1}
                 format={pixels}
                 onChange={(n) =>
@@ -1414,7 +1414,7 @@ export default function Home() {
               <Range
                 label="Diagonal blur"
                 value={settings.diagonalBlurRadius}
-                max={60}
+                max={ranges.diagonalBlurRadius[1]}
                 step={1}
                 format={pixels}
                 onChange={(n) =>

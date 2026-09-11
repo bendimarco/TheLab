@@ -48,8 +48,8 @@ int main(int argc,char **argv) {
   glUniform1i(glGetUniformLocation(program,"blurProfile"),1);
   uniform(program,"u.media",iw,ih,0,0); uniform(program,"u.raster",width,height,0,0);
   uniform(program,"u.uvX",1,0,0,0); uniform(program,"u.uvY",0,1,0,0);
-  uniform(program,"u.frontProjection",1,1,60,.12); uniform(program,"u.frontEdge",1.6,strip?0:.55,.18,1.5);
-  uniform(program,"u.frontCorner",.97,1,.006,0); uniform(program,"u.frontBlur",47,1,.24,.44);
+  uniform(program,"u.frontProjection",1,1,75,.12); uniform(program,"u.frontEdge",1.6,strip?0:.98,.18,1.5);
+  uniform(program,"u.frontCorner",.97,1,.006,0); uniform(program,"u.frontBlur",65,1,.24,.44);
   uniform(program,"u.creaseBlur",0,3.1,0,.48690378);
   glViewport(0,0,width,height); unsigned char *out=malloc(width*height*4);
   float curves[4][4]={{1,0,1,.48690378},{0,1,0,1},{1,0,1,0},{1,0,0,1}};
@@ -57,6 +57,9 @@ int main(int argc,char **argv) {
   for(int ci=0;ci<(strip?4:1);ci++) {
     float table[1025]; for(int i=0;i<=1024;i++) {float x=(float)i/1024,lo=0,hi=1; for(int k=0;k<24;k++){float t=(lo+hi)/2;if(cubic(t,curves[ci][0],curves[ci][2])<x)lo=t;else hi=t;} table[i]=cubic((lo+hi)/2,curves[ci][1],curves[ci][3]);} table[0]=0;table[1024]=1;
     glTexImage2D(GL_TEXTURE_2D,0,GL_R32F,1025,1,0,GL_RED,GL_FLOAT,table);
+    for(int strength=0;strength<(strip?2:1);strength++) {
+    uniform(program,"u.frontProjection",1,1,strength?160:75,.12);
+    uniform(program,"u.frontBlur",strength?120:65,1,.24,.44);
     for(int ai=0;ai<(strip?8:1);ai++) for(int bottom=0;bottom<(strip?2:1);bottom++) {
       float angle=strip?poses[ai]:atof(argv[3]);
       uniform(program,"u.geometry",width,height,strip?500:640,angle/180);
@@ -74,6 +77,7 @@ int main(int argc,char **argv) {
       }
     }
   }
-  if(strip) printf("GPU straight-boundary regression: %s (64 face/angle/edge/curve cases)\n",failures?"FAIL":"PASS");
+  }
+  if(strip) printf("GPU straight-boundary regression: %s (128 face/angle/edge/curve/strength cases)\n",failures?"FAIL":"PASS");
   return failures?1:0;
 }

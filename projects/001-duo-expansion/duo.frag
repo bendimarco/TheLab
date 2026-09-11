@@ -141,7 +141,12 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     float endShift = saturate(u.frontBlur.z) * tilt * tilt * tilt * tilt;
     // Shape the spatial ramp before moving its clear boundary. Compressing the
     // ramp preserves a gradient all the way to the free edge (no clamped plateau).
-    float curvedX = spatialBlurCurve(x);
+    // A broad face needs a gradual, visible blur rather than an extreme easing.
+    // Introduce the editable crease-protecting curve as its projected width shrinks.
+    // abs(c) treats the cover and inside symmetrically around the edge-on pose.
+    float narrowness = 1.0 - abs(c);
+    float curveInfluence = smoothstep(0.15, 0.85, narrowness);
+    float curvedX = mix(x, spatialBlurCurve(x), curveInfluence);
     float blurX = mix(curvedX, 1.0, endShift);
     float panelWidth = inside ? w - bezel : viewport.x;
     float creaseWeight = creaseBlurWeight(abs(flatX - anchorX) + endShift * panelWidth,
@@ -167,9 +172,10 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     // image boundary prevents the footprint from changing when crossing it.
     float distanceToImageEdge = abs(pictureEdgeDistance);
     float diagonalMask = 1.0 - smoothstep(0.0, max(1.0, diagonalRadius * 3.0), distanceToImageEdge);
-    // Shape the feather into the image with the same editable Bézier.
-    // It remains fully blurred at the wedge and reaches zero at the clear boundary.
-    float diagonalBlur = diagonalRadius * spatialBlurCurve(diagonalMask);
+    // The editable curve already shapes diagonalRadius from hinge to free edge.
+    // Applying it again across this band collapses the feather with steep curves,
+    // leaving a hard black/photo boundary. Keep this symmetric feather smooth.
+    float diagonalBlur = diagonalRadius * diagonalMask;
     // Combine blur widths in quadrature, using one gather instead of two passes.
     float combinedBlur = sqrt(blur * blur + diagonalBlur * diagonalBlur);
     float imagePixel = u.geometry.y / max(u.raster.y, 1.0) *

@@ -106,7 +106,7 @@ Older saved versions acquire neutral curve heights of 1/3 and 2/3. Web versions 
 
 ### Published starting values
 
-The published starting preset captures the current local tuning: main blur 60, diagonal blur 47, projected crease width 0, crease easing 3.1, moving-face darkness 0.55, and right-screen darkness 0.44. Curve handles are (1, 0) and (1, 0.4869037828947368). Both handles sit at the far end of the horizontal range, delaying the main blur until nearer the free edge. With crease width 0, the separate crease gate is disabled; its easing value is preserved for when the width is increased. These are source defaults and Reset values; older saved versions keep their own tuning.
+The published starting preset captures the current local tuning: main blur 75, diagonal blur 65, projected crease width 0, crease easing 3.1, moving-face darkness 0.98, and right-screen darkness 0.44. Curve handles are (1, 0) and (1, 0.4869037828947368). Both handles sit at the far end of the horizontal range, delaying the main blur until nearer the free edge. With crease width 0, the separate crease gate is disabled; its easing value is preserved for when the width is increased. These are source defaults and Reset values; older saved versions keep their own tuning.
 
 
 ### Flat picture and black surround
@@ -180,3 +180,11 @@ A direct user gesture can be required even for muted video under site/browser po
 Automated regressions cover bounded portrait cropping, direct-source selection, absence of per-frame canvas copies on the direct path, upload coalescing/order, same-size storage reuse, mipmap reuse during geometry-only draws, local blob persistence, object-URL cleanup, compressed sample reuse, gesture recovery, and superseded playback promises. Production compilation also passes. These tests establish resource and scheduling behavior; mocks do not measure GPU speed or prove pixel-equivalent color management across browsers.
 
 Physical iPhone frame pacing, battery use, thermal throttling, and sustained Safari performance have not been measured. No percentage speedup or guaranteed 60 fps follows from this work. The next performance comparison should use the same viewport, source frame, fold trajectory, and blur settings, then separate decode/presentation drops, main-thread copy/upload cost, and GPU draw duration. Measure both moving and stationary folds, with special attention to strongly folded poses and large blur footprints. Test a 60 fps source separately from this 30 fps clip. Preserve effect quality until measurements identify the actual bottleneck.
+
+### Higher blur strengths
+
+Progressive blur now defaults to 75 points (previously 60), with a 160-point maximum. Diagonal blur defaults to 65 points (previously 47), with a 120-point maximum. Both use the existing spatial curve, crease protection, and prefiltered 25-tap sampling; stronger radii do not add shader taps. Existing saved versions retain their values. New defaults and Reset use the stronger treatment. Slider bounds and validation share the same ranges, including saved-version round trips at the maximums.
+
+Edge darkening now defaults to 0.98. The diagonal feather no longer applies the editable curve twice: it keeps the curve along the hinge-to-edge axis, but uses the smooth symmetric distance mask across the picture boundary. Reapplying the steep spatial curve across that narrow band collapsed the visible feather. The photo/black boundary remains the original flat projected rectangle, with the same kernel on both sides.
+
+The spatial curve now blends with a linear ramp according to foreshortening: `smoothstep(0.15, 0.85, 1 - abs(cos(angle)))`. Wide faces use the even ramp; narrowing faces progressively adopt the editable curve, reaching its full crease protection near edge-on. This applies to both progressive and diagonal blur and is symmetric for the cover and inside face. The fixed 24% end shift is applied afterward. Native boundary checks pass at defaults and maximum strengths across 128 face/angle/edge/curve/strength cases.

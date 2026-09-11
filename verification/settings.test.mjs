@@ -269,13 +269,13 @@ test('canvas resize redraws before returning, skips unchanged buffer sizes and r
   }
 });
 
-test('new sessions start with the exact captured tuning and curve', () => {
+test('new sessions start with stronger blur and the captured curve', () => {
   assert.deepEqual(defaults, {
-    blurRadius: 60,
-    diagonalBlurRadius: 47,
+    blurRadius: 75,
+    diagonalBlurRadius: 65,
     creaseBlendWidth: 0,
     creaseBlurEasing: 3.1,
-    edgeDarkness: 0.55,
+    edgeDarkness: 0.98,
     rightScreenDarkness: 0.44,
     closedImageAligned: 0,
     blurCurveStartX: 1,
@@ -283,6 +283,23 @@ test('new sessions start with the exact captured tuning and curve', () => {
     blurCurveStart: 0,
     blurCurveEnd: 0.4869037828947368,
   });
+});
+
+test('expanded blur ranges round-trip through saved versions', () => {
+  const settings = { ...defaults, blurRadius: 160, diagonalBlurRadius: 120 };
+  assert.equal(validSettings(settings), true);
+  const archive = addVersion(
+    emptyArchive(),
+    settings,
+    'max-blur',
+    '2026-09-11T06:25:00Z',
+  );
+  assert.deepEqual(
+    parseArchive(JSON.stringify(archive)).versions[0].settings,
+    settings,
+  );
+  assert.equal(validSettings({ ...settings, blurRadius: 161 }), false);
+  assert.equal(validSettings({ ...settings, diagonalBlurRadius: 121 }), false);
 });
 
 test('freely moving handles produce extreme curves with finite, monotonic lookup samples', () => {
