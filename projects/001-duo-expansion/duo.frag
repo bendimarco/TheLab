@@ -160,9 +160,12 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     // The image rectangle itself defines the top and bottom boundaries.
     // No independently derived triangle depth or shadow opacity is needed.
     float pictureEdgeDistance = min(imagePosition.y, imageViewport.y - imagePosition.y);
-    float projectedGlassTop = (bezel - h * 0.5) * flatScale + h * 0.5;
-    float wedgeHeight = max(0.0, bezel - projectedGlassTop);
-    float diagonalTurn = max(turn, 0.3 * smoothstep(0.0, 1.5, wedgeHeight));
+    // Ramp the early corner treatment over the first ~29 degrees, not 1.5
+    // projected pixels. The old pixel threshold reached 30% almost instantly.
+    // This starts with zero slope at either flat endpoint and blends smoothly
+    // into the full fold treatment without a max() crossover.
+    float cornerOnset = smoothstep(0.0, 0.5, treatmentAngle);
+    float diagonalTurn = turn + 0.3 * cornerOnset * (1.0 - turn);
     // A second blur grows toward the two wedges, as well as toward the free edge
     // and with rotation. Its band extends inward from the geometric wedge boundary.
     float blurHingeProtection = smoothstep(0.0, 0.025, blurX);

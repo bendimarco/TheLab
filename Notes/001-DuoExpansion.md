@@ -188,3 +188,7 @@ Progressive blur now defaults to 75 points (previously 60), with a 160-point max
 Edge darkening now defaults to 0.98. The diagonal feather no longer applies the editable curve twice: it keeps the curve along the hinge-to-edge axis, but uses the smooth symmetric distance mask across the picture boundary. Reapplying the steep spatial curve across that narrow band collapsed the visible feather. The photo/black boundary remains the original flat projected rectangle, with the same kernel on both sides.
 
 The spatial curve now blends with a linear ramp according to foreshortening: `smoothstep(0.15, 0.85, 1 - abs(cos(angle)))`. Wide faces use the even ramp; narrowing faces progressively adopt the editable curve, reaching its full crease protection near edge-on. This applies to both progressive and diagonal blur and is symmetric for the cover and inside face. The fixed 24% end shift is applied afterward. Native boundary checks pass at defaults and maximum strengths across 128 face/angle/edge/curve/strength cases.
+
+### Gentle corner onset
+
+Diagonal blur formerly acquired a 30% floor as soon as the projected wedge grew to 1.5 points, making its first motion abrupt at both flat endpoints. The early treatment now follows `smoothstep(0, 0.5, treatmentAngle)` and blends into the main angular response with `turn + 0.3 * cornerOnset * (1 - turn)`. It starts with zero slope and develops over roughly 29 degrees, without the old `max` crossover. This changes angular onset only; the angle-dependent spatial curve and symmetric top/bottom feather remain intact.
