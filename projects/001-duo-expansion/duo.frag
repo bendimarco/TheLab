@@ -62,6 +62,34 @@ float pictureCoverage(float y, float height, float footprint) {
     return smoothstep(-footprint, footprint, y) *
            smoothstep(-footprint, footprint, height - y);
 }
+const vec2 BLUR_OFFSETS[25] = vec2[25](
+    vec2(0.000000000, 0.000000000),
+    vec2(0.110865760, 0.000000000),
+    vec2(-0.110865760, -0.000000000),
+    vec2(-0.144802176, 0.132650654),
+    vec2(0.144802176, -0.132650654),
+    vec2(0.022708480, -0.258751413),
+    vec2(-0.022708480, 0.258751413),
+    vec2(0.192010361, 0.250443514),
+    vec2(-0.192010361, -0.250443514),
+    vec2(-0.362793156, -0.064173001),
+    vec2(0.362793156, 0.064173001),
+    vec2(0.355044139, -0.225850019),
+    vec2(-0.355044139, 0.225850019),
+    vec2(-0.123225878, 0.458394126),
+    vec2(0.123225878, -0.458394126),
+    vec2(-0.245306258, -0.472322272),
+    vec2(0.245306258, 0.472322272),
+    vec2(0.560329439, 0.204631412),
+    vec2(-0.560329439, -0.204631412),
+    vec2(-0.622144493, 0.256812203),
+    vec2(0.622144493, -0.256812203),
+    vec2(0.328458145, -0.701895978),
+    vec2(-0.328458145, 0.701895978),
+    vec2(0.286722993, 0.914118084),
+    vec2(-0.286722993, -0.914118084)
+);
+
 vec3 sampleFlatPicture(sampler2D photo, vec2 position, vec2 size,
                       float radius, float pixelSize, DuoUniforms u) {
     vec3 surround = vec3(0.012);
@@ -73,24 +101,22 @@ vec3 sampleFlatPicture(sampler2D photo, vec2 position, vec2 size,
         return mix(surround, textureLod(photo, encodedUV(uv, u), 0.0).rgb,
                    pictureCoverage(position.y, size.y, pixelFootprint));
     }
-    float lod = max(0.0, log2(max(radiusInTexels * 0.5, 1.0)));
-    // Each tap covers a prefiltered footprint, including the virtual image mask.
-    // Symmetric weights guarantee 50% coverage exactly on the picture boundary,
-    // for every radius: changing the curve cannot bow the perceived edge.
-    float footprint = max(pixelFootprint, radius * 0.5);
+    // A finer mip footprint avoids magnifying large box-filtered mip texels.
+    float lod = max(0.0, log2(max(radiusInTexels * 0.35, 1.0)));
+    float footprint = max(pixelFootprint, radius * 0.35);
     vec3 sum = vec3(0.0);
     float total = 0.0;
-    for (int y = -2; y <= 2; ++y) {
-        for (int x = -2; x <= 2; ++x) {
-            vec2 offset = vec2(x, y) * 0.5;
-            float weight = exp(-3.0 * dot(offset, offset));
-            vec2 tap = position + offset * radius;
-            vec2 uv = aspectFill(clamp(tap / size, 0.0, 1.0), size, u.media.xy);
-            float coverage = pictureCoverage(tap.y, size.y, footprint);
-            vec3 color = textureLod(photo, encodedUV(uv, u), lod).rgb;
-            sum += weight * mix(surround, color, coverage);
-            total += weight;
-        }
+    // Gaussian-distributed disk samples replace the visible square 5x5 lattice.
+    // Opposite pairs keep coverage exactly symmetric at the picture boundary.
+    // Fixed offsets avoid temporal noise, including when the source is video.
+    for (int i = 0; i < 25; ++i) {
+        vec2 offset = BLUR_OFFSETS[i];
+        vec2 tap = position + offset * radius;
+        vec2 uv = aspectFill(clamp(tap / size, 0.0, 1.0), size, u.media.xy);
+        float coverage = pictureCoverage(tap.y, size.y, footprint);
+        vec3 color = textureLod(photo, encodedUV(uv, u), lod).rgb;
+        sum += mix(surround, color, coverage);
+        total += 1.0;
     }
     return sum / total;
 }

@@ -192,3 +192,7 @@ The spatial curve now blends with a linear ramp according to foreshortening: `sm
 ### Gentle corner onset
 
 Diagonal blur formerly acquired a 30% floor as soon as the projected wedge grew to 1.5 points, making its first motion abrupt at both flat endpoints. The early treatment now follows `smoothstep(0, 0.5, treatmentAngle)` and blends into the main angular response with `turn + 0.3 * cornerOnset * (1 - turn)`. It starts with zero slope and develops over roughly 29 degrees, without the old `max` crossover. This changes angular onset only; the angle-dependent spatial curve and symmetric top/bottom feather remain intact.
+
+### High-radius sampling
+
+The regular 5×5 gather could expose a square sampling pattern at large radii, compounded by coarse box-filtered mip levels. The gather now uses 25 fixed Gaussian-distributed disk samples, arranged as a center plus 12 opposite pairs. Opposite offsets preserve symmetric picture-boundary coverage, and static offsets avoid temporal noise. The prefilter footprint is reduced from 0.5 to 0.35 times the radius so coarse mip texels are less prominent. Sample count remains 25; no extra video processing pass is added.
