@@ -122,3 +122,10 @@ The web starting preset now matches the saved Version 1: main blur 56, diagonal 
 Main blur and diagonal blur now share the same effective spatial weight: `edgeRamp(mix(curve(x), 1, shift), start, exponent)`. Previously the diagonal radius used the raw curved coordinate, bypassing the main blur's onset and exponent, so its corners stayed disproportionately blurred near the crease. Sharing the weight reduces that mismatch on both faces while retaining the fixed angular shift and projected crease gate.
 
 The diagonal feather into the image also evaluates the same Bézier: `diagonalRadius × curve(diagonalMask)`. Its zero and full-strength endpoints remain fixed. The default low-start curve keeps the clear side of the feather sharper and concentrates blur closer to the wedge. The shadow's softness continues to follow the diagonal radius, while darkness strength remains independent. This adds two cached lookup-texture reads per shaded folding-face pixel, without another photo blur pass; actual GPU timing has not been measured.
+
+
+### Softer wedge tips and lighter reveal shading
+
+Reducing diagonal blur near the crease also reduced shadow feather width, exposing a sharp top/bottom triangle. Shadow feathering now has an independent minimum of 1.2–2.5% of image height, increasing with tilt. A separate smoothstep fades wedge opacity across the innermost 18% of the panel, reaching zero at the hinge so it joins the stationary screen without a shadow step. Physical bezel geometry stays crisp; only the optical shadow is feathered. This deliberately separates shadow softness from photo blur radius, so an extreme blur curve cannot collapse the shadow feather.
+
+The stationary screen starts at 75% of the shared darkness setting (25% less overlay opacity). Its reveal uses `smootherstep(revealed^1.35)`, delaying the initial clearing while keeping zero endpoint slopes and a monotonic fade. It is still fully clear at edge-on. These are fixed tuning values; existing saved settings remain usable. No extra image samples or rendering passes are added.

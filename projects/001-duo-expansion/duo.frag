@@ -150,15 +150,20 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     float imageScale = max(imageViewport.x / u.media.x, imageViewport.y / u.media.y);
     vec2 blurSpan = combinedBlur / (u.media.xy * imageScale);
     vec3 color = sampleFront(photo, uv, blurSpan, u);
-    // Feather the dark mask too; blurring only the photo leaves a crisp black wedge.
-    float softness = max(0.0001, u.frontCorner.z + diagonalRadius / viewport.y);
+    // Keep the shadow feather independent of a small/zero diagonal blur radius.
+    // Otherwise sharper curve settings turn the wedge back into a hard triangle.
+    float shadowFeather = mix(0.012, 0.025, tilt * tilt);
+    float softness = max(shadowFeather, u.frontCorner.z + diagonalRadius / viewport.y);
     float top = 1.0 - smoothstep(depth - softness, depth + softness, localUV.y);
     float bottom = 1.0 - smoothstep(depth - softness, depth + softness, 1.0 - localUV.y);
     // Keep the first/last ~14 degrees lighter without delaying wedge blur.
     // The geometric visibility still reaches zero at the exact flat endpoint.
     float cornerEndpointFade = mix(0.45, 1.0, smoothstep(0.0, 0.24, treatmentAngle));
+    // Fade the top and bottom wedge tips over a wider band before the hinge.
+    // The adjoining fixed screen has no wedge, so opacity must reach zero here.
+    float cornerHingeFade = smoothstep(0.0, 0.18, x);
     float corner = u.frontCorner.y > 0.0
-        ? saturate(u.frontCorner.x) * cornerEndpointFade * max(saturate(turn * 4.0), wedgeVisibility) * max(top, bottom) * hingeProtection : 0.0;
+        ? saturate(u.frontCorner.x) * cornerEndpointFade * max(saturate(turn * 4.0), wedgeVisibility) * max(top, bottom) * hingeProtection * cornerHingeFade : 0.0;
     return color * (1.0 - dark) * (1.0 - corner);
 }
 
@@ -171,12 +176,12 @@ float rightRevealShade(float angle, float w, float h, float strength) {
     float insideEdge = c * w * camera / (camera - s * w);
     float frontEdge = (c * w - s * thickness) * camera / (camera - s * w - c * thickness);
     float covered = saturate(max(insideEdge, frontEdge) / w);
-    // Start dark and only clear. Quintic easing slows brightness changes near
-    // first exposure and full visibility without introducing a darkness pulse.
-    float revealed = 1.0 - covered;
+    // Start 25% lighter and let the reveal build more gently before clearing.
+    // The biased quintic stays monotonic with flat slopes at both endpoints.
+    float revealed = pow(1.0 - covered, 1.35);
     float clearAmount = revealed * revealed * revealed *
         (revealed * (revealed * 6.0 - 15.0) + 10.0);
-    return 1.0 - saturate(strength) * (1.0 - saturate(clearAmount));
+    return 1.0 - 0.75 * saturate(strength) * (1.0 - saturate(clearAmount));
 }
 
 // Hardware detail follows the physical front glass, independently of photo
