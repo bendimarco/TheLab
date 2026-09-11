@@ -40,7 +40,7 @@ const { addVersion, parseArchive, emptyArchive } = await import(
 );
 const { DuoRenderer } = await import(pathToFileURL(join(dir, 'renderer.mjs')));
 const { decodeURL } = await import(pathToFileURL(join(dir, 'media.mjs')));
-const { readPhotos, savePhotos, photoFile } = await import(
+const { readPhotos, savePhotos, deletePhoto, photoFile } = await import(
   pathToFileURL(join(dir, 'photo-library.mjs'))
 );
 await rm(dir, { recursive: true, force: true });
@@ -423,6 +423,15 @@ test('personal rotation persists blobs across connections and appends instead of
     assert.equal(restored[0].thumbnail, first.thumbnail);
     await savePhotos([]);
     assert.equal((await readPhotos()).length, 2);
+    await deletePhoto('first');
+    assert.deepEqual(
+      (await readPhotos()).map((p) => p.id),
+      ['second'],
+    );
+    await deletePhoto('missing');
+    assert.equal((await readPhotos()).length, 1);
+    await deletePhoto('second');
+    assert.deepEqual(await readPhotos(), []);
   } finally {
     globalThis.indexedDB = previous;
   }

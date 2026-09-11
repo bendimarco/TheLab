@@ -92,3 +92,18 @@ export async function preparePhoto(
 export function photoFile(photo: LocalPhoto): File {
   return new File([photo.blob], photo.name, { type: photo.blob.type });
 }
+
+export async function deletePhoto(id: string): Promise<void> {
+  const db = await openLibrary();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE, 'readwrite');
+      transaction.objectStore(STORE).delete(id);
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } finally {
+    db.close();
+  }
+}

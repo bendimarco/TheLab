@@ -35,6 +35,7 @@ import {
 import { decodeImage, decodeURL } from '@/projects/001-duo-expansion/media';
 import {
   readPhotos,
+  deletePhoto,
   savePhotos,
   preparePhoto,
   photoFile,
@@ -100,6 +101,22 @@ const percent = (n: number) => `${Math.round(n * 100)}%`;
 const pixels = (n: number) => `${Math.round(n)} px`;
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+function GalleryPhoto({ photo, open }: { photo: LocalPhoto; open: boolean }) {
+  const image = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    if (!open || !image.current) return;
+    const element = image.current;
+    const url = URL.createObjectURL(photo.blob);
+    element.src = url;
+    return () => {
+      element.src = photo.thumbnail;
+      URL.revokeObjectURL(url);
+    };
+  }, [photo.blob, photo.thumbnail, open]);
+  // eslint-disable-next-line nextjs/no-img-element
+  return <img ref={image} src={photo.thumbnail} alt="" loading="lazy" />;
+}
+
 export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -126,7 +143,28 @@ export default function Home() {
   const [renderError, setRenderError] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(true);
-  const [recentPhotos, setRecentPhotos] = useState<LocalPhoto[]>([]);
+  const [personalPhotos, setPersonalPhotos] = useState<LocalPhoto[]>([]);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const galleryClose = useRef<HTMLButtonElement>(null);
+  const galleryTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (galleryOpen) {
+      renderer.current?.stop();
+      galleryClose.current?.focus({ preventScroll: true });
+      const escape = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          setGalleryOpen(false);
+          galleryTrigger.current?.focus({ preventScroll: true });
+        }
+      };
+      window.addEventListener('keydown', escape);
+      return () => window.removeEventListener('keydown', escape);
+    }
+  }, [galleryOpen]);
+  const closeGallery = () => {
+    setGalleryOpen(false);
+    galleryTrigger.current?.focus({ preventScroll: true });
+  };
   const [fileCount, setFileCount] = useState(0);
   const [selectedSample, setSelectedSample] = useState<number | null>(0);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -218,7 +256,7 @@ export default function Home() {
         if (!alive.current || mediaJob.current !== job) return;
         imageFiles.current = photos.map(photoFile);
         setFileCount(photos.length);
-        setRecentPhotos(photos.slice(-3));
+        setPersonalPhotos(photos);
         const index = photos.length - 1;
         imageIndex.current = index;
         setSelectedSample(index >= 0 ? null : 0);
@@ -461,7 +499,7 @@ export default function Home() {
       if (!alive.current) return;
       imageFiles.current = photos.map(photoFile);
       setFileCount(photos.length);
-      setRecentPhotos(photos.slice(-3));
+      setPersonalPhotos(photos);
       setSelectedSample(null);
       const index = photos.findIndex((photo) => photo.id === prepared[0].id);
       imageIndex.current = index;
@@ -480,6 +518,48 @@ export default function Home() {
       if (alive.current) setBusy(false);
     }
   }
+  async function removePhoto(id: string) {
+    if (busy || uploadLock.current) return;
+    uploadLock.current = true;
+    setBusy(true);
+    setError('');
+    const activeId = personalPhotos[imageIndex.current]?.id;
+    try {
+      await deletePhoto(id);
+      const photos = await readPhotos();
+      if (!alive.current) return;
+      imageFiles.current = photos.map(photoFile);
+      setPersonalPhotos(photos);
+      setFileCount(photos.length);
+      if (!photos.length) {
+        imageIndex.current = -1;
+        setSelectedSample(0);
+        setGalleryOpen(false);
+        await changeImage(defaultPhoto.src);
+      } else if (selectedSample === null && activeId === id) {
+        imageIndex.current = 0;
+        await changeImage(imageFiles.current[0]);
+      } else {
+        imageIndex.current = photos.findIndex((photo) => photo.id === activeId);
+      }
+    } catch {
+      if (alive.current)
+        setError(
+          'Could not remove this photo from browser storage. Please try again.',
+        );
+    } finally {
+      uploadLock.current = false;
+      if (alive.current) setBusy(false);
+    }
+  }
+  async function choosePersonalPhoto(index: number) {
+    if (busy) return;
+    if (await changeImage(imageFiles.current[index])) {
+      imageIndex.current = index;
+      setSelectedSample(null);
+      closeGallery();
+    }
+  }
   async function chooseSample(index: number) {
     if (busy) return;
     if (await changeImage(samplePhotos[index].src)) {
@@ -495,6 +575,7 @@ export default function Home() {
       const next =
         ((selectedSample ?? 0) +
           1 +
+          // eslint-disable-next-line react/react-compiler -- Random choice runs only in the shuffle click handler.
           Math.floor(Math.random() * (samplePhotos.length - 1))) %
         samplePhotos.length;
       await chooseSample(next);
@@ -505,6 +586,7 @@ export default function Home() {
     const next =
       (imageIndex.current +
         1 +
+        // eslint-disable-next-line react/react-compiler -- Random choice runs only in the shuffle click handler.
         Math.floor(Math.random() * Math.max(1, files.length - 1))) %
       files.length;
     if (await changeImage(files[next])) {
@@ -543,7 +625,7 @@ export default function Home() {
           <SlidersHorizontal size={19} />
         </SheetTrigger>
         <section
-          className="demo"
+          className={`demo ${galleryOpen ? 'gallery-open' : ''}`}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
@@ -553,7 +635,8 @@ export default function Home() {
           {/* The canvas is a keyboard-operable, continuously adjustable rendered surface. */}
           <canvas
             ref={canvas}
-            tabIndex={0}
+            tabIndex={galleryOpen ? -1 : 0}
+            aria-hidden={galleryOpen}
             role="slider"
             aria-label="Duo expansion. Drag left to open, right to close. In landscape, tap to animate."
             aria-valuemin={0}
@@ -619,14 +702,91 @@ export default function Home() {
               {renderError}
             </p>
           )}
-          <div className="demo-photo-tools">
-            {fileCount > 0 && (
-              <div
-                className="personal-rotation"
-                aria-label={`${fileCount} uploaded ${fileCount === 1 ? 'photo' : 'photos'}`}
+          <section
+            className="personal-gallery"
+            aria-labelledby="personal-gallery-title"
+            aria-hidden={!galleryOpen}
+            inert={!galleryOpen}
+          >
+            <div className="gallery-heading">
+              <h2 id="personal-gallery-title">
+                Your photos <span>{fileCount}</span>
+              </h2>
+              <button
+                ref={galleryClose}
+                className="glass icon"
+                aria-label="Close photo gallery"
+                onClick={closeGallery}
               >
-                <div className="photo-stack" aria-hidden="true">
-                  {recentPhotos.map((photo, index) => (
+                <X size={18} />
+              </button>
+            </div>
+            <div className="gallery-grid">
+              {personalPhotos.map((photo, index) => (
+                <div
+                  className="gallery-card"
+                  key={photo.id}
+                  style={
+                    {
+                      '--card-delay': `${Math.min(index, 6) * 45}ms`,
+                      '--card-tilt': `${((index % 3) - 1) * 3}deg`,
+                    } as React.CSSProperties
+                  }
+                >
+                  <button
+                    className="gallery-pick"
+                    disabled={busy}
+                    aria-label={`Use ${photo.name}`}
+                    onClick={() => void choosePersonalPhoto(index)}
+                  >
+                    <GalleryPhoto photo={photo} open={galleryOpen} />
+                  </button>
+                  <button
+                    className="gallery-remove"
+                    disabled={busy}
+                    aria-label={`Remove ${photo.name}`}
+                    title="Remove photo"
+                    onClick={() => void removePhoto(photo.id)}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+          <div className="demo-photo-tools">
+            <button
+              className="glass shuffle"
+              aria-label="Shuffle images"
+              title="Shuffle images"
+              disabled={
+                busy ||
+                galleryOpen ||
+                (fileCount === 1 && selectedSample === null)
+              }
+              onClick={() => void shuffle()}
+            >
+              <Shuffle size={18} />
+            </button>
+            <button
+              className="glass photo-upload"
+              disabled={busy}
+              onClick={() => fileInput.current?.click()}
+            >
+              <Upload size={18} /> {busy ? 'Opening…' : 'Add photos'}
+            </button>
+            {fileCount > 0 && (
+              <button
+                ref={galleryTrigger}
+                className="personal-rotation"
+                aria-label={`View ${fileCount} uploaded ${fileCount === 1 ? 'photo' : 'photos'}`}
+                aria-expanded={galleryOpen}
+                onClick={() =>
+                  galleryOpen ? closeGallery() : setGalleryOpen(true)
+                }
+              >
+                <span className="photo-stack" aria-hidden="true">
+                  {personalPhotos.slice(-3).map((photo, index) => (
                     // eslint-disable-next-line nextjs/no-img-element
                     <img
                       key={photo.id}
@@ -635,36 +795,17 @@ export default function Home() {
                       style={
                         {
                           '--photo-index': index,
-                          '--photo-count': recentPhotos.length,
+                          '--photo-count': Math.min(personalPhotos.length, 3),
                         } as React.CSSProperties
                       }
                     />
                   ))}
-                </div>
-                <span>
-                  {fileCount} {fileCount === 1 ? 'photo' : 'photos'}
-                  <small>Your rotation</small>
                 </span>
-              </div>
+                <span>
+                  {fileCount} {fileCount === 1 ? 'Photo' : 'Photos'}
+                </span>
+              </button>
             )}
-            <div className="demo-photo-buttons">
-              <button
-                className="glass shuffle"
-                aria-label="Shuffle images"
-                title="Shuffle images"
-                disabled={busy || (fileCount === 1 && selectedSample === null)}
-                onClick={() => void shuffle()}
-              >
-                <Shuffle size={18} />
-              </button>
-              <button
-                className="glass photo-upload"
-                disabled={busy}
-                onClick={() => fileInput.current?.click()}
-              >
-                <Upload size={18} /> {busy ? 'Opening…' : 'Add photos'}
-              </button>
-            </div>
           </div>
           {error && (
             <p className="photo-notice" role="alert">
