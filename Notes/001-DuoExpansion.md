@@ -208,3 +208,5 @@ Right-screen darkness now defaults to 0.5. The existing internal crease exponent
 ### Corner intersection correction
 
 The corner-cylinder intersection now uses the closest-approach form instead of subtracting large nearly equal squared terms in the quadratic discriminant. Analytic candidates must also be entry-facing; an exit surface must not substitute for a missed front intersection. The rim returns to 0.026-height thickness, the silver overlap reduces to 0.002, and the black bezel increases to 0.034. This addresses intersection stability rather than broadening the silver mask.
+
+The border proportions were subsequently slimmed: black bezel 0.024 of height (down from 0.034), metal depth 0.022 (down from 0.026), and silver overlap 0.0015. The stable entry-facing corner intersections and metal fallback remain unchanged.

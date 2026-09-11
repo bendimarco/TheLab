@@ -421,7 +421,7 @@ export default function Home() {
         1,
         0.98 * Math.min((width - 48) / 1.44, (height - 40) / 1.26),
       );
-      const rightEdge = width / 2 + (phoneHeight * 0.36 * 3.5) / (3.5 - 0.026);
+      const rightEdge = width / 2 + (phoneHeight * 0.36 * 3.5) / (3.5 - 0.022);
       el.parentElement?.style.setProperty('--hint-left', `${rightEdge + 12}px`);
       el.parentElement?.style.setProperty('--hint-top', `${height / 2}px`);
     };
