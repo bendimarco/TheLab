@@ -33,6 +33,22 @@ for (const file of [
     .outputText.replace("'./settings'", "'./settings.mjs'");
   await writeFile(join(dir, `${file}.mjs`), output);
 }
+const heightSource = await readFile(
+  new URL('../lib/observe-height.ts', import.meta.url),
+  'utf8',
+);
+await writeFile(
+  join(dir, 'observe-height.mjs'),
+  ts.transpileModule(heightSource, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ES2022,
+    },
+  }).outputText,
+);
+const { observeDeferredHeight } = await import(
+  pathToFileURL(join(dir, 'observe-height.mjs'))
+);
 const { defaults, validSettings, ease, blurCurve, blurCurveTable } =
   await import(pathToFileURL(join(dir, 'settings.mjs')));
 const { addVersion, parseArchive, emptyArchive } = await import(
@@ -434,5 +450,74 @@ test('personal rotation persists blobs across connections and appends instead of
     assert.deepEqual(await readPhotos(), []);
   } finally {
     globalThis.indexedDB = previous;
+  }
+});
+
+test('toolbar measurements defer layout writes, coalesce changes, and cancel on cleanup', () => {
+  const original = {
+    ResizeObserver: globalThis.ResizeObserver,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+  };
+  const frames = new Map();
+  let callback,
+    id = 0,
+    disconnected = false;
+  globalThis.ResizeObserver = class {
+    constructor(fn) {
+      callback = fn;
+    }
+    observe() {}
+    disconnect() {
+      disconnected = true;
+    }
+  };
+  globalThis.requestAnimationFrame = (fn) => {
+    frames.set(++id, fn);
+    return id;
+  };
+  globalThis.cancelAnimationFrame = (id) => frames.delete(id);
+  const writes = [];
+  const notify = (height) => callback([{ contentRect: { height } }]);
+  const flush = () => {
+    const pending = [...frames.values()];
+    frames.clear();
+    pending.forEach((fn) => fn());
+  };
+  try {
+    const stop = observeDeferredHeight({}, (height) => writes.push(height));
+    notify(42);
+    notify(88);
+    assert.deepEqual(writes, [], 'no layout mutation inside observer delivery');
+    assert.equal(frames.size, 1);
+    flush();
+    assert.deepEqual(
+      writes,
+      [88],
+      'only the latest wrapped toolbar size is applied',
+    );
+    notify(88);
+    assert.equal(frames.size, 0, 'unchanged size causes no extra frame');
+    notify(44);
+    notify(88);
+    flush();
+    assert.deepEqual(
+      writes,
+      [88],
+      'returning to the applied height cancels stale work',
+    );
+    notify(44);
+    stop();
+    flush();
+    notify(120);
+    flush();
+    assert.equal(disconnected, true);
+    assert.deepEqual(
+      writes,
+      [88],
+      'no writes after cleanup, including late notifications',
+    );
+  } finally {
+    Object.assign(globalThis, original);
   }
 });

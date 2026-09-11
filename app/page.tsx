@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
+import { observeDeferredHeight } from '@/lib/observe-height';
 import { Switch } from '@/components/ui/switch';
 import {
   Sheet,
@@ -323,13 +324,11 @@ export default function Home() {
     );
     observer.observe(el);
     // Reserve the actual toolbar height, including wrapped rows on narrow screens.
-    const toolsObserver = new ResizeObserver(([entry]) => {
-      el.style.setProperty(
-        '--photo-tools-height',
-        `${entry.contentRect.height}px`,
-      );
-    });
-    if (photoTools.current) toolsObserver.observe(photoTools.current);
+    const stopObservingTools = photoTools.current
+      ? observeDeferredHeight(photoTools.current, (height) => {
+          el.style.setProperty('--photo-tools-height', `${height}px`);
+        })
+      : () => {};
     const job = ++mediaJob.current;
     setBusy(true);
     void (async () => {
@@ -384,7 +383,7 @@ export default function Home() {
       alive.current = false;
       cancelFade();
       observer.disconnect();
-      toolsObserver.disconnect();
+      stopObservingTools();
       r?.dispose();
       renderer.current = null;
       el.removeEventListener('webglcontextlost', lost);
