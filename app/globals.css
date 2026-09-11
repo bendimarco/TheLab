@@ -60,7 +60,9 @@ canvas:focus-visible {
   height: 100%;
   overflow: hidden;
   background: #f5f5f5;
-  transition: width var(--panel-motion);
+  transition:
+    width var(--panel-motion),
+    height var(--panel-motion);
 }
 .panel-open .demo {
   width: calc(100% - var(--panel-space));
@@ -124,8 +126,15 @@ canvas:focus-visible {
   opacity: 1;
 }
 @media (max-width: 600px), (pointer: coarse) and (max-height: 600px) {
+  :root {
+    --mobile-sheet-height: min(72dvh, 640px);
+    --mobile-sheet-bottom: max(12px, env(safe-area-inset-bottom));
+  }
   .panel-open .demo {
     width: 100%;
+    height: calc(
+      100% - var(--mobile-sheet-height) - var(--mobile-sheet-bottom) - 12px
+    );
   }
   .panel-open .modify,
   .panel-open .gallery-dismiss {
@@ -133,11 +142,11 @@ canvas:focus-visible {
   }
   .controls[data-slot='sheet-content'] {
     top: auto;
-    bottom: max(12px, env(safe-area-inset-bottom));
+    bottom: var(--mobile-sheet-bottom);
     left: 12px;
     right: 12px;
     width: auto;
-    height: min(72dvh, 640px);
+    height: var(--mobile-sheet-height);
     max-height: calc(100dvh - 24px - env(safe-area-inset-bottom));
     padding: 20px;
     border-radius: 24px;
