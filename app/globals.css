@@ -68,7 +68,13 @@ canvas:focus-visible {
 .demo canvas {
   display: block;
   width: 100%;
-  height: 100%;
+  height: max(
+    1px,
+    calc(
+      100% - var(--photo-tools-height, 44px) -
+        max(20px, env(safe-area-inset-bottom)) - 20px
+    )
+  );
   touch-action: pan-y;
 }
 .modify,
@@ -505,7 +511,7 @@ canvas:focus-visible {
   transform: rotate(
     calc((var(--photo-index) - (var(--photo-count) - 1) / 2) * 12deg)
   );
-  transition: transform 200ms ease;
+  transition: transform 320ms cubic-bezier(0.22, 0.8, 0.25, 1);
 }
 .personal-rotation:hover .photo-stack img {
   transform: translateY(-3px)
@@ -646,7 +652,7 @@ canvas:focus-visible {
   width: 100%;
   height: 100%;
   transform: scale(1);
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 420ms cubic-bezier(0.22, 0.8, 0.25, 1);
 }
 @media (hover: hover) and (pointer: fine) {
   .gallery-open .gallery-slot:hover .gallery-surface {
@@ -688,16 +694,23 @@ canvas:focus-visible {
   padding: 0;
   border: 0.75px solid #ffffffb3;
   border-radius: 50%;
-  background: linear-gradient(160deg, #fffe, #ededf2dc);
+  background: #f4f4f8eb;
   color: #55565e;
   backdrop-filter: blur(14px);
   box-shadow:
     0 2px 7px #20212620,
     inset 0 1px 0 #ffffff70;
 }
-.gallery-remove.glass:hover {
-  background: #fff;
-  color: #c83136;
+.gallery-remove.glass {
+  transition:
+    background-color 240ms ease,
+    color 240ms ease,
+    box-shadow 240ms ease;
+}
+.gallery-remove.glass:hover,
+.gallery-remove.glass:focus-visible {
+  background: #ff3b30;
+  color: #fff;
 }
 .photo-notice {
   z-index: 4;

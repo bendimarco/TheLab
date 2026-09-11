@@ -126,6 +126,7 @@ function GalleryPhoto({ photo, open }: { photo: LocalPhoto; open: boolean }) {
 export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const photoTools = useRef<HTMLDivElement>(null);
   const renderer = useRef<DuoRenderer | null>(null);
   const currentImage = useRef<HTMLCanvasElement | null>(null);
   const settingsRef = useRef<Settings>({ ...defaults });
@@ -321,6 +322,14 @@ export default function Home() {
       ),
     );
     observer.observe(el);
+    // Reserve the actual toolbar height, including wrapped rows on narrow screens.
+    const toolsObserver = new ResizeObserver(([entry]) => {
+      el.style.setProperty(
+        '--photo-tools-height',
+        `${entry.contentRect.height}px`,
+      );
+    });
+    if (photoTools.current) toolsObserver.observe(photoTools.current);
     const job = ++mediaJob.current;
     setBusy(true);
     void (async () => {
@@ -375,6 +384,7 @@ export default function Home() {
       alive.current = false;
       cancelFade();
       observer.disconnect();
+      toolsObserver.disconnect();
       r?.dispose();
       renderer.current = null;
       el.removeEventListener('webglcontextlost', lost);
@@ -873,7 +883,7 @@ export default function Home() {
               ))}
             </div>
           </section>
-          <div className="demo-photo-tools">
+          <div ref={photoTools} className="demo-photo-tools">
             <button
               className="glass shuffle"
               aria-label="Shuffle images"
