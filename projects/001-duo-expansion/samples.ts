@@ -7,11 +7,11 @@ export const samplePhotos = [
     thumbnail: '/photos/italy/p1001341-thumb.jpg',
   },
   {
-    id: 'p1001338',
-    label: 'Dog',
+    id: 'p1011887',
+    label: 'Mountain trail',
     kind: 'image' as const,
-    src: '/photos/italy/p1001338.jpg',
-    thumbnail: '/photos/italy/p1001338-thumb.jpg',
+    src: '/photos/italy/p1011887.jpg',
+    thumbnail: '/photos/italy/p1011887-thumb.jpg',
   },
   ...[
     { id: 'p1011479', label: 'Lake' },

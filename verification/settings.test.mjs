@@ -726,12 +726,12 @@ test('fold guidance waits for idle, stops after interaction, and restarts on a f
   }
 });
 
-test('sample collection starts with dog video, then dog, lake and friend', () => {
+test('sample collection starts with dog video, then mountain trail, lake and friend', () => {
   assert.equal(defaultPhoto.id, 'p1001341');
   assert.equal(defaultPhoto.kind, 'video');
   assert.deepEqual(
     samplePhotos.map((p) => p.label),
-    ['Dog getting pets', 'Dog', 'Lake', 'Friend'],
+    ['Dog getting pets', 'Mountain trail', 'Lake', 'Friend'],
   );
 });
 
@@ -1054,7 +1054,7 @@ test('desktop and phones share video defaults while motion/data preferences use 
   ])
     assert.equal(shouldPreferStillSamples({ ...desktop, ...change }), true);
   assert.equal(defaultSampleIndex(false), 0);
-  assert.equal(samplePhotos[defaultSampleIndex(true)].id, 'p1001338');
+  assert.equal(samplePhotos[defaultSampleIndex(true)].id, 'p1011887');
   assert.deepEqual(shuffleSampleIndices(false), [0, 1, 2, 3]);
   assert.deepEqual(shuffleSampleIndices(true), [1, 2, 3]);
   assert.ok(
