@@ -171,6 +171,9 @@ export default function Home() {
         r?.dispose();
         r = new DuoRenderer(el);
         renderer.current = r;
+        // Fill newly introduced settings when Fast Refresh retains an older state.
+        settingsRef.current = { ...defaults, ...settingsRef.current };
+        setSettings(settingsRef.current);
         r.settings = settingsRef.current;
         r.resize(el.clientWidth, el.clientHeight);
         if (currentImage.current) r.setImage(currentImage.current);
@@ -772,6 +775,18 @@ export default function Home() {
                   applySettings({ ...settingsRef.current, edgeDarkness: n })
                 }
               />
+              <Range
+                label="Right screen darkness"
+                value={settings.rightScreenDarkness}
+                max={1}
+                format={percent}
+                onChange={(n) =>
+                  applySettings({
+                    ...settingsRef.current,
+                    rightScreenDarkness: n,
+                  })
+                }
+              />
             </div>
             <p className="hint">
               Drag to fold. Tap in landscape to open or close.
@@ -794,7 +809,7 @@ export default function Home() {
                 onClick={() => fileInput.current?.click()}
               >
                 <Upload size={17} />
-                {busy ? 'Opening image…' : 'Upload landscape images'}
+                {busy ? 'Opening image…' : 'Upload images'}
               </button>
               <button
                 className="text-button"

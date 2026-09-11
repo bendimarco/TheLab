@@ -18,7 +18,7 @@ Open the local URL printed by the server. `npm run build` creates the production
 - Drag left to open and right to close; the expansion slider and Closed / Front / Inside / Open presets let you inspect exact poses.
 - In landscape, tap the demo to animate between endpoints. Space also animates; arrow keys and Home / End work when the demo is focused.
 - Tune animation duration, progressive blur, diagonal blur, crease blend width, blur easing, and edge darkening.
-- Upload or drop landscape images. Select multiple images to enable shuffle. New images fade through white. Unsupported formats, portrait images, and oversized files leave the current image in place.
+- Upload or drop images. Vertical and square images are cropped in the center to 3:2 before loading. Select multiple images to enable shuffle. New images fade through white. Unsupported formats and oversized files leave the current image in place.
 - Save, rename, restore, and delete parameter versions. Names increment automatically and include save timestamps. These snapshots contain the exposed shader settings, not image files, animation duration, or shader source.
 - Versions and animation duration stay in this browser's local storage. Clearing site data removes them. A local preview and the hosted site have separate storage.
 - Image decoding and rendering happen on your device. Visitor uploads are not sent to a server or added to this repository. The Italy sample collection is bundled publicly. Refreshing returns to the bundled sample; choose your images again.
@@ -67,3 +67,6 @@ Canvas resizing draws synchronously after updating its backing buffer. This prev
 GitHub: https://github.com/bendimarco/TheLab
 
 This remains a standalone app. Clone the repository, run `npm ci`, then `npm run dev` with Node 22.13 or newer. The initial shader preset matches the selected Version 1; visitor-created versions remain local to each browser. The Sites hosting manifest is retained for that deployment option.
+
+
+For the folding image boundary regression on macOS, run `node verification/boundary.test.mjs`. It uses the native GPU to check the actual shader at multiple angles and curve shapes; it does not require opening a browser.

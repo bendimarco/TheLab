@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const dir = await mkdtemp(join(tmpdir(), 'weblab-test-'));
-for (const file of ['settings', 'versions', 'renderer']) {
+for (const file of ['settings', 'versions', 'renderer', 'media']) {
   let source = await readFile(
     new URL(`../projects/001-duo-expansion/${file}.ts`, import.meta.url),
     'utf8',
@@ -32,6 +32,7 @@ const { addVersion, parseArchive, emptyArchive } = await import(
   pathToFileURL(join(dir, 'versions.mjs'))
 );
 const { DuoRenderer } = await import(pathToFileURL(join(dir, 'renderer.mjs')));
+const { decodeURL } = await import(pathToFileURL(join(dir, 'media.mjs')));
 await rm(dir, { recursive: true, force: true });
 test('saved settings round-trip independently; deleting does not reuse version numbers', () => {
   const effect = { ...defaults };
@@ -209,17 +210,18 @@ test('canvas resize redraws before returning, skips unchanged buffer sizes and r
   }
 });
 
-test('new sessions start with the chosen Version 1 tuning', () => {
+test('new sessions start with the exact captured tuning and curve', () => {
   assert.deepEqual(defaults, {
-    blurRadius: 56,
-    diagonalBlurRadius: 41,
-    creaseBlendWidth: 0.26,
-    creaseBlurEasing: 3.3,
-    edgeDarkness: 0.58,
-    blurCurveStartX: 1 / 3,
-    blurCurveEndX: 2 / 3,
+    blurRadius: 60,
+    diagonalBlurRadius: 47,
+    creaseBlendWidth: 0,
+    creaseBlurEasing: 3.1,
+    edgeDarkness: 0.55,
+    rightScreenDarkness: 0.44,
+    blurCurveStartX: 1,
+    blurCurveEndX: 1,
     blurCurveStart: 0,
-    blurCurveEnd: 0.4,
+    blurCurveEnd: 0.4869037828947368,
   });
 });
 
@@ -255,6 +257,8 @@ test('existing vertical-only curves migrate without changing their profile; XY h
     'old',
     '2026-09-10T12:00:00Z',
   );
+  old.versions[0].settings.blurCurveStart = 0;
+  old.versions[0].settings.blurCurveEnd = 0.4;
   delete old.versions[0].settings.blurCurveStartX;
   delete old.versions[0].settings.blurCurveEndX;
   const migrated = parseArchive(JSON.stringify(old)).versions[0].settings;
@@ -282,4 +286,74 @@ test('existing vertical-only curves migrate without changing their profile; XY h
     '2026-09-10T12:00:00Z',
   );
   assert.deepEqual(parseArchive(JSON.stringify(custom)), custom);
+});
+
+test('right-screen darkness preserves legacy shading and saves independently', () => {
+  const old = addVersion(
+    emptyArchive(),
+    { ...defaults, edgeDarkness: 0.8 },
+    'old-right',
+    '2026-09-11T00:00:00Z',
+  );
+  delete old.versions[0].settings.rightScreenDarkness;
+  assert.equal(
+    parseArchive(JSON.stringify(old)).versions[0].settings.rightScreenDarkness,
+    0.2,
+  );
+  const custom = addVersion(
+    emptyArchive(),
+    { ...defaults, rightScreenDarkness: 0.37, edgeDarkness: 0 },
+    'custom-right',
+    '2026-09-11T00:00:00Z',
+  );
+  assert.deepEqual(parseArchive(JSON.stringify(custom)), custom);
+  assert.equal(validSettings({ ...defaults, rightScreenDarkness: 1.1 }), false);
+});
+
+test('image decoding centers portrait/square crops and retains landscape framing', async () => {
+  const originalImage = globalThis.Image;
+  const originalDocument = globalThis.document;
+  const fixtures = {
+    portrait: [3000, 4000],
+    square: [1500, 1500],
+    landscape: [6000, 4000],
+    invalid: [0, 0],
+    oversized: [10000, 10000],
+  };
+  let draw;
+  globalThis.Image = class {
+    async decode() {
+      [this.naturalWidth, this.naturalHeight] = fixtures[this.src];
+    }
+  };
+  globalThis.document = {
+    createElement: () => ({
+      width: 0,
+      height: 0,
+      getContext: () => ({
+        fillRect() {},
+        drawImage(...args) {
+          draw = args.slice(1);
+        },
+      }),
+    }),
+  };
+  try {
+    const portrait = await decodeURL('portrait');
+    assert.deepEqual([portrait.width, portrait.height], [2048, 1365]);
+    assert.deepEqual(draw, [0, 1000, 3000, 2000, 0, 0, 2048, 1365]);
+    const square = await decodeURL('square');
+    assert.deepEqual([square.width, square.height], [1500, 1000]);
+    assert.deepEqual(draw, [0, 250, 1500, 1000, 0, 0, 1500, 1000]);
+    const landscape = await decodeURL('landscape');
+    assert.deepEqual([landscape.width, landscape.height], [2048, 1365]);
+    assert.deepEqual(draw, [0, 0, 6000, 4000, 0, 0, 2048, 1365]);
+    await assert.rejects(decodeURL('invalid'), /no usable dimensions/);
+    await assert.rejects(decodeURL('oversized'), /80 megapixels/);
+  } finally {
+    if (originalImage === undefined) delete globalThis.Image;
+    else globalThis.Image = originalImage;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
 });

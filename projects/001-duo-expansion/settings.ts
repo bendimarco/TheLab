@@ -1,13 +1,14 @@
 export const defaults = {
-  blurRadius: 56,
-  diagonalBlurRadius: 41,
-  creaseBlendWidth: 0.26,
-  creaseBlurEasing: 3.3,
-  edgeDarkness: 0.58,
-  blurCurveStartX: 1 / 3,
-  blurCurveEndX: 2 / 3,
+  blurRadius: 60,
+  diagonalBlurRadius: 47,
+  creaseBlendWidth: 0,
+  creaseBlurEasing: 3.1,
+  edgeDarkness: 0.55,
+  rightScreenDarkness: 0.44,
+  blurCurveStartX: 1,
+  blurCurveEndX: 1,
   blurCurveStart: 0,
-  blurCurveEnd: 0.4,
+  blurCurveEnd: 0.4869037828947368,
 };
 export type Settings = typeof defaults;
 export const ranges: Record<keyof Settings, [number, number]> = {
@@ -16,6 +17,7 @@ export const ranges: Record<keyof Settings, [number, number]> = {
   creaseBlendWidth: [0, 1],
   creaseBlurEasing: [1, 4],
   edgeDarkness: [0, 1],
+  rightScreenDarkness: [0, 1],
   blurCurveStartX: [0, 1],
   blurCurveEndX: [0, 1],
   blurCurveStart: [0, 1],

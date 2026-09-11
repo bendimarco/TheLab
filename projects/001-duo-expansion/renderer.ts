@@ -196,13 +196,19 @@ export class DuoRenderer {
     );
     uniform('geometry', [this.width, this.height, h, this.progress]);
     uniform('media', [...this.mediaSize, this.white, 0]);
+    uniform('raster', [this.canvas.width, this.canvas.height, 0, 0]);
     uniform('uvX', [1, 0, 0, 0]);
     uniform('uvY', [0, 1, 0, 0]);
     uniform('frontProjection', [1, 1, s.blurRadius, 0.12]);
     uniform('frontEdge', [1.6, s.edgeDarkness, 0.18, 1.5]);
     uniform('frontCorner', [0.97, 1, 0.006, 0]);
     // The blur boundary shift is fixed and cannot be changed by saved versions.
-    uniform('frontBlur', [s.diagonalBlurRadius, 1, 0.24, 0]);
+    uniform('frontBlur', [
+      s.diagonalBlurRadius,
+      1,
+      0.24,
+      s.rightScreenDarkness,
+    ]);
     uniform('creaseBlur', [
       s.creaseBlendWidth,
       s.creaseBlurEasing,

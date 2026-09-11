@@ -17,12 +17,13 @@ float saturate(float x) { return clamp(x, 0.0, 1.0); }
 struct DuoUniforms {
     vec4 geometry; // viewport width/height in points, panel height, progress
     vec4 media;    // upright media width/height, white transition amount
+    vec4 raster;   // drawable width/height for pixel-sized reconstruction
     vec4 uvX;     // upright UV -> encoded texture UV (video orientation)
     vec4 uvY;
     vec4 frontProjection; // enabled, perspective lock, blur radius (points), blur start
     vec4 frontEdge;       // blur exponent, dark amount, dark start, dark exponent
     vec4 frontCorner;     // dark amount, geometric reach, softness, onset (radians)
-    vec4 frontBlur;       // diagonal blur radius (points), inside enabled, blur end shift, reserved
+    vec4 frontBlur;       // diagonal blur radius (points), inside enabled, blur end shift, stationary screen darkness
     vec4 creaseBlur; // projected blend width / panel width, easing exponent, cubic handle 1 height, cubic handle 2 height
 };
 // A rectangle with rounding only at its free edge. The hinge edge stays straight.
@@ -55,21 +56,39 @@ vec2 encodedUV(vec2 uv, DuoUniforms u) {
     return vec2(dot(u.uvX.xy, uv) + u.uvX.z, dot(u.uvY.xy, uv) + u.uvY.z);
 }
 
-vec3 sampleFront(sampler2D photo, vec2 uv, vec2 blurSpan,
-                   DuoUniforms u) {
-    
-    float radiusInTexels = max(blurSpan.x * u.media.x, blurSpan.y * u.media.y);
-    if (radiusInTexels < 0.25) return textureLod(photo, encodedUV(uv, u), 0.0).rgb;
-    // Neighboring taps cover adjacent prefiltered footprints rather than widely
-    // separated sharp texels. Fractional LOD makes radius changes continuous.
+// The source is a flat photograph with a black surround. Blur this composite,
+// rather than blurring the photo and then inventing a separate triangular shadow.
+float pictureCoverage(float y, float height, float footprint) {
+    return smoothstep(-footprint, footprint, y) *
+           smoothstep(-footprint, footprint, height - y);
+}
+vec3 sampleFlatPicture(sampler2D photo, vec2 position, vec2 size,
+                      float radius, float pixelSize, DuoUniforms u) {
+    vec3 surround = vec3(0.012);
+    float imageScale = max(size.x / u.media.x, size.y / u.media.y);
+    float radiusInTexels = radius / imageScale;
+    float pixelFootprint = max(pixelSize * 0.5, 0.0001);
+    if (radiusInTexels < 0.25) {
+        vec2 uv = aspectFill(clamp(position / size, 0.0, 1.0), size, u.media.xy);
+        return mix(surround, textureLod(photo, encodedUV(uv, u), 0.0).rgb,
+                   pictureCoverage(position.y, size.y, pixelFootprint));
+    }
     float lod = max(0.0, log2(max(radiusInTexels * 0.5, 1.0)));
+    // Each tap covers a prefiltered footprint, including the virtual image mask.
+    // Symmetric weights guarantee 50% coverage exactly on the picture boundary,
+    // for every radius: changing the curve cannot bow the perceived edge.
+    float footprint = max(pixelFootprint, radius * 0.5);
     vec3 sum = vec3(0.0);
     float total = 0.0;
     for (int y = -2; y <= 2; ++y) {
         for (int x = -2; x <= 2; ++x) {
             vec2 offset = vec2(x, y) * 0.5;
             float weight = exp(-3.0 * dot(offset, offset));
-            sum += weight * textureLod(photo, encodedUV(uv + offset * blurSpan, u), lod).rgb;
+            vec2 tap = position + offset * radius;
+            vec2 uv = aspectFill(clamp(tap / size, 0.0, 1.0), size, u.media.xy);
+            float coverage = pictureCoverage(tap.y, size.y, footprint);
+            vec3 color = textureLod(photo, encodedUV(uv, u), lod).rgb;
+            sum += weight * mix(surround, color, coverage);
             total += weight;
         }
     }
@@ -105,7 +124,6 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     vec2 imageViewport = inside ? vec2(2.0 * w - 2.0 * bezel, viewport.y) : viewport;
     vec2 imagePosition = inside ? vec2(w - imagePoint.x - bezel, imagePoint.y - bezel)
                                   : imagePoint - bezel;
-    vec2 uv = aspectFill(imagePosition / imageViewport, imageViewport, u.media.xy);
     float onset = clamp(u.frontCorner.w, 0.0, PI / 3.0);
     // Front: build toward edge-on. Inside: unwind that envelope toward flat.
     float treatmentAngle = inside ? PI - angle : angle;
@@ -127,44 +145,31 @@ vec3 foldColor(vec2 p, float w, float h, float angle, bool inside,
     float blur = max(0.0, u.frontProjection.z) * turn * creaseWeight * spatialWeight;
     float dark = saturate(u.frontEdge.y) * turn *
                  edgeRamp(x, u.frontEdge.z, u.frontEdge.w);
-    // At reach=1 the inner edge of either wedge projects to a horizontal line.
-    float geometricDepth = max(0.0, 0.5 * (z - referenceZ) / (camera - referenceZ));
-    float depth = geometricDepth * max(0.0, u.frontCorner.y);
-    // The wedge exists before the broad angular treatment has built up. Cover
-    // stretched boundary texels as soon as it is about one logical pixel deep.
-    float wedgeVisibility = smoothstep(0.0, 1.5, depth * viewport.y);
-    float diagonalTurn = max(turn, 0.3 * wedgeVisibility);
-    float hingeProtection = smoothstep(0.0, 0.025, x);
+    // The image rectangle itself defines the top and bottom boundaries.
+    // No independently derived triangle depth or shadow opacity is needed.
+    float pictureEdgeDistance = min(imagePosition.y, imageViewport.y - imagePosition.y);
+    float projectedGlassTop = (bezel - h * 0.5) * flatScale + h * 0.5;
+    float wedgeHeight = max(0.0, bezel - projectedGlassTop);
+    float diagonalTurn = max(turn, 0.3 * smoothstep(0.0, 1.5, wedgeHeight));
     // A second blur grows toward the two wedges, as well as toward the free edge
     // and with rotation. Its band extends inward from the geometric wedge boundary.
     float blurHingeProtection = smoothstep(0.0, 0.025, blurX);
     float diagonalRadius = u.frontCorner.y > 0.0
         ? max(0.0, u.frontBlur.x) * diagonalTurn * spatialWeight * blurHingeProtection * creaseWeight : 0.0;
-    // Signed distance to the virtual flat picture, not the rotating glass edge.
-    // Zero projects onto the same horizontal top/bottom line at every panel x.
-    float pictureEdgeDistance = (min(localUV.y, 1.0 - localUV.y) - depth) * viewport.y * flatScale;
-    float distanceInsideImage = max(0.0, pictureEdgeDistance);
-    float diagonalMask = 1.0 - smoothstep(0.0, max(1.0, diagonalRadius * 3.0), distanceInsideImage);
+    // Use a symmetric distance field: the same kernel on either side of the
+    // image boundary prevents the footprint from changing when crossing it.
+    float distanceToImageEdge = abs(pictureEdgeDistance);
+    float diagonalMask = 1.0 - smoothstep(0.0, max(1.0, diagonalRadius * 3.0), distanceToImageEdge);
     // Shape the feather into the image with the same editable Bézier.
     // It remains fully blurred at the wedge and reaches zero at the clear boundary.
     float diagonalBlur = diagonalRadius * spatialBlurCurve(diagonalMask);
     // Combine blur widths in quadrature, using one gather instead of two passes.
     float combinedBlur = sqrt(blur * blur + diagonalBlur * diagonalBlur);
-    float imageScale = max(imageViewport.x / u.media.x, imageViewport.y / u.media.y);
-    vec2 blurSpan = combinedBlur / (u.media.xy * imageScale);
-    vec3 color = sampleFront(photo, uv, blurSpan, u);
-    // Feather entirely outside the flat picture. A symmetric feather leaked
-    // below its top (and above its bottom), bowing the apparent image boundary.
-    // Radius can change the feather width, but never its clear endpoint.
-    float shadowWidth = max(mix(0.012, 0.025, tilt * tilt) * viewport.y,
-                            u.frontCorner.z * viewport.y + diagonalRadius);
-    float cornerMask = 1.0 - smoothstep(-shadowWidth, 0.0, pictureEdgeDistance);
-    // Keep the first/last ~14 degrees lighter without delaying wedge blur.
-    // The geometric visibility still reaches zero at the exact flat endpoint.
-    float cornerEndpointFade = mix(0.45, 1.0, smoothstep(0.0, 0.24, treatmentAngle));
-    float corner = u.frontCorner.y > 0.0
-        ? saturate(u.frontCorner.x) * cornerEndpointFade * max(saturate(turn * 4.0), wedgeVisibility) * cornerMask * hingeProtection : 0.0;
-    return color * (1.0 - dark) * (1.0 - corner);
+    float imagePixel = u.geometry.y / max(u.raster.y, 1.0) *
+                       (camera - referenceZ) / camera;
+    vec3 color = sampleFlatPicture(photo, imagePosition, imageViewport,
+                                  combinedBlur, imagePixel, u);
+    return color * (1.0 - dark);
 }
 
 // Estimate the covered fraction from the projected free edge of both slab faces.
@@ -176,12 +181,12 @@ float rightRevealShade(float angle, float w, float h, float strength) {
     float insideEdge = c * w * camera / (camera - s * w);
     float frontEdge = (c * w - s * thickness) * camera / (camera - s * w - c * thickness);
     float covered = saturate(max(insideEdge, frontEdge) / w);
-    // Start 25% lighter and let the reveal build more gently before clearing.
-    // The biased quintic stays monotonic with flat slopes at both endpoints.
-    float revealed = pow(1.0 - covered, 1.35);
+    // The stationary glass needs only a faint occlusion cue. Clear it earlier,
+    // once 65% is revealed, with gentle slopes at first exposure and completion.
+    float revealed = saturate((1.0 - covered) / 0.65);
     float clearAmount = revealed * revealed * revealed *
         (revealed * (revealed * 6.0 - 15.0) + 10.0);
-    return 1.0 - 0.75 * saturate(strength) * (1.0 - saturate(clearAmount));
+    return 1.0 - saturate(strength) * (1.0 - saturate(clearAmount));
 }
 
 // Hardware detail follows the physical front glass, independently of photo
@@ -230,7 +235,7 @@ vec3 panelColor(vec2 p, float w, float h, bool cover, bool left,
     vec3 color = textureLod(photo, uv, 0.0).rgb;
     // Retain the old inside lighting only for snapshots predating the inside effect.
     float shade = left ? 1.0 - 0.23 * sin(angle) : 1.0;
-    if (!cover && !left) shade = rightRevealShade(angle, w, h, u.frontEdge.y);
+    if (!cover && !left) shade = rightRevealShade(angle, w, h, u.frontBlur.w);
     color *= shade;
     return frontCamera(mix(color, vec3(1.0), clamp(u.media.z, 0.0, 1.0)), p, w, h, cover);
 }

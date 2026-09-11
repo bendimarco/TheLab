@@ -44,7 +44,7 @@ Image loading creates a complete mip chain once. The shader chooses a fractional
 
 This is a practical, bounded approximation to a broad Gaussian, not a mathematically exact Gaussian convolution. It costs one gather per affected surface fragment and no frame-by-frame offscreen blur passes. Mip generation is paid only when the image changes.
 
-Progressive blur grows with distance from the hinge and the panel's treatment angle. The inside face uses the inverted angular envelope: its treatment relaxes as it opens. The diagonal blur grows near the two geometric wedges. Their radii combine in quadrature, `sqrt(main² + diagonal²)`, so one gather implements both. The wedge opacity is feathered as well; blurring only the photograph would leave the black mask visibly sharp.
+Progressive blur grows with distance from the hinge and the panel's treatment angle. The inside face uses the inverted angular envelope: its treatment relaxes as it opens. The diagonal blur grows near the two geometric wedges. Their radii combine in quadrature, `sqrt(main² + diagonal²)`, so one gather implements both. The black surround is included in that gather. Its boundary is filtered with the photograph, so there is no separately feathered triangle overlay.
 
 ## Easing into the crease
 
@@ -90,7 +90,7 @@ A useful next comparison is to feed both implementations the same horizontal gri
 
 ## Reading path
 
-Start with `settings.ts` for the current editable values, then `renderer.ts` for resource lifetime and uniform mapping. In `duo.frag`, read `shadeDuo` and `panelColor` first. Follow with `foldColor`, `creaseBlurWeight`, and `sampleFront`. Read the slab-intersection and bevel functions last; they provide the geometry underlying those visual treatments.
+Start with `settings.ts` for the current editable values, then `renderer.ts` for resource lifetime and uniform mapping. In `duo.frag`, read `shadeDuo` and `panelColor` first. Follow with `foldColor`, `creaseBlurWeight`, and `sampleFlatPicture`. Read the slab-intersection and bevel functions last; they provide the geometry underlying those visual treatments.
 
 
 ### Editable spatial blur curve
@@ -104,37 +104,32 @@ The default heights, 0 and 0.4, keep the middle of the turning image clearer whi
 Older saved versions acquire neutral curve heights of 1/3 and 2/3. Web versions store both coordinates of each handle. Versions saved before horizontal movement acquire x coordinates 1/3 and 2/3, preserving their exact prior shape. The fixed boundary shift and revised non-clamping ramp apply to every version, so historical renders can differ from the previous additive-clamp algorithm.
 
 
-### Covering the first visible wedge
-
-Perspective compensation reveals a thin triangular area beyond the flat picture near the start of a fold. Clamped texture sampling repeats the image boundary there, which looks like vertical streaks if shading waits for the slow angular envelope. Wedge visibility now follows its geometric depth in logical pixels, using smoothstep from 0 to 1.5 pixels. It drives early wedge shadow opacity and a small diagonal-blur floor (30% of the configured radius, still spatially masked). This confines the correction to the top and bottom boundaries, preserves the main image falloff, and vanishes continuously at the flat endpoints.
-
-Validation: the native Metal regression suite passes with the new curve and early wedge treatment, including both flat endpoints, hinge continuity, horizontal image lock, and stationary-screen isolation. The web production build and seven automated checks pass, covering curve monotonicity, version migration, and synchronous resize drawing. These checks do not establish real-device frame rates or cross-browser visual equivalence.
-
-The diagonal shadow has a separate endpoint attenuation: `mix(0.45, 1, smoothstep(0, 0.24, treatmentAngle))`. Over the first/last roughly 14 degrees it approaches full strength gradually, reducing the dark cutoff near flat. Geometric wedge visibility still clears it completely at the endpoint. Diagonal blur remains unchanged so stretched boundary texels stay softened even while their shadow is lighter.
-
 ### Published starting values
 
-The web starting preset now matches the saved Version 1: main blur 56, diagonal blur 41, projected crease width 0.26, crease easing 3.3, darkness 0.58, and curve heights 0 / 0.4. The larger radii soften the free edge and wedges more strongly, while the narrower crease blend and higher exponent preserve a sharper region near the hinge. These are source defaults, so new visitors do not need a local saved version to reproduce this tuning.
+The published starting preset captures the current local tuning: main blur 60, diagonal blur 47, projected crease width 0, crease easing 3.1, moving-face darkness 0.55, and right-screen darkness 0.44. Curve handles are (1, 0) and (1, 0.4869037828947368). Both handles sit at the far end of the horizontal range, delaying the main blur until nearer the free edge. With crease width 0, the separate crease gate is disabled; its easing value is preserved for when the width is increased. These are source defaults and Reset values; older saved versions keep their own tuning.
 
 
-### Shared diagonal blur falloff
+### Flat picture and black surround
 
-Main blur and diagonal blur now share the same effective spatial weight: `edgeRamp(mix(curve(x), 1, shift), start, exponent)`. Previously the diagonal radius used the raw curved coordinate, bypassing the main blur's onset and exponent, so its corners stayed disproportionately blurred near the crease. Sharing the weight reduces that mismatch on both faces while retaining the fixed angular shift and projected crease gate.
+The rotating glass is a window onto a flat rectangular photograph. Rays select the physical surface; the inverse projection maps that hit into the virtual picture. Points outside the picture's top and bottom belong to its black surround. Those exposed regions naturally form triangles under the sloping bezel. They are not independent shadow shapes.
 
-The diagonal feather into the image also evaluates the same Bézier: `diagonalRadius × curve(diagonalMask)`. Its zero and full-strength endpoints remain fixed. The default low-start curve keeps the clear side of the feather sharper and concentrates blur closer to the wedge. The shadow's softness continues to follow the diagonal radius, while darkness strength remains independent. This adds two cached lookup-texture reads per shaded folding-face pixel, without another photo blur pass; actual GPU timing has not been measured.
+The previous implementation blurred the photograph first, then multiplied a separate triangle mask into it. The triangle's opacity and feather width depended on position, tilt and blur radius. Even when its mathematical endpoint was horizontal, its visible transition was not: a different opacity or an offset feather moves the middle of the transition. Widening hinge fades or moving only the clear endpoint could not fix that modeling error. Those patches have been removed.
+
+`sampleFlatPicture` filters the picture and surround together. Each of the existing 25 symmetric taps samples a clamped picture coordinate, calculates coverage of the virtual rectangle, and mixes that tap with the black surround before accumulation. The mask is prefiltered over each tap's footprint, matching the mip-prefiltered photo and avoiding discrete steps at large blur radii. Coverage is symmetric around each image boundary. For a uniform white picture, the exact boundary is always 50% picture / 50% surround, regardless of kernel radius; this is the invariant that keeps the perceived edge straight. Only top/bottom coverage is needed here: horizontal edges belong to the physical panel silhouette or the continuous inner spread.
+
+Main and diagonal blur share the editable spatial curve and projected crease gate. The diagonal kernel varies symmetrically with distance on either side of the picture boundary, and its feather uses the same curve. Their radii combine in quadrature before the single gather. Darkening of the glass remains independent. The virtual surround itself does not fade with angle or hinge distance: rotation changes how much of it the physical glass exposes. At a flat endpoint there is no exposed triangle, so no artificial angular opacity fade is needed.
+
+Near-zero blur uses a half-drawable-pixel coverage footprint, converted to virtual-picture units. Main blur and diagonal blur at large radii still use the bounded mip-prefiltered gather. This adds coverage arithmetic to existing taps, with no extra texture samples or offscreen passes. Clamping taps to the virtual photo rectangle also prevents texture content outside the intended crop from leaking into the surround.
+
+The stationary right screen has an independent maximum overlay opacity, `rightScreenDarkness`, defaulting to the captured 0.44 (44%). Its opacity clears with `smootherstep(clamp(revealed / 0.65))`, reaching zero once 65% of that screen is visible. Moving-face darkening remains independent. Saved versions include the new value; older versions migrate to 25% of their stored edge-darkness setting to preserve their previous fixed-screen appearance. The value uses the previously unused fourth component of `frontBlur`, with no extra shader sampling.
+
+### Boundary validation
+
+Run `node verification/boundary.test.mjs` on macOS. It compiles the actual production shader through the native OpenGL driver, adapting only the GLSL version/precision declarations and the test entry point. The test projects sample rows onto both faces and checks the rendered white-picture/black-surround boundary at eight angles, both top and bottom, and four curve shapes, including extreme handles: 64 cases. The boundary must remain within two 8-bit levels of its expected 50% coverage value across all 512 columns. This checks the rendered transition rather than just the coordinate equation.
+
+The 64 cases passed. Offscreen full-phone renders with the sample photograph were also inspected at 120° and 145°. Type checking, the existing ten settings/resize regressions, and the production build are checked separately. Native OpenGL coverage does not prove WebGL behavior on every browser or real-device frame rates.
 
 
-### Softer wedge tips and lighter reveal shading
+### Portrait input framing
 
-Reducing diagonal blur near the crease also reduced shadow feather width, exposing a sharp top/bottom triangle. Shadow feathering now has an independent minimum of 1.2–2.5% of image height, increasing with tilt. A separate smoothstep fades wedge opacity across the innermost 18% of the panel, reaching zero at the hinge so it joins the stationary screen without a shadow step. Physical bezel geometry stays crisp; only the optical shadow is feathered. This deliberately separates shadow softness from photo blur radius, so an extreme blur curve cannot collapse the shadow feather.
-
-The stationary screen starts at 75% of the shared darkness setting (25% less overlay opacity). Its reveal uses `smootherstep(revealed^1.35)`, delaying the initial clearing while keeping zero endpoint slopes and a monotonic fade. It is still fully clear at edge-on. These are fixed tuning values; existing saved settings remain usable. No extra image samples or rendering passes are added.
-
-
-### Anchoring the wedge feather to the flat image boundary
-
-The wider symmetric shadow feather introduced a visible flare: its clear endpoint extended into the image by a radius that varied along the fold. Fading opacity near the hinge could soften that shape, but could not align it.
-
-The current treatment measures signed distance to the virtual picture boundary, `(min(localUV.y, 1 − localUV.y) − depth) × viewportHeight × flatScale`. With geometric reach 1, its zero contour is exactly the horizontal top or bottom of the perspective-locked image. Shadow opacity now fades only outside that boundary using `1 − smoothstep(−width, 0, distance)`. Changing width moves the dark end of the feather; the clear end stays fixed. The wide 18% hinge fade is removed, since it changed the apparent shape instead of correcting the boundary. The narrower original hinge protection remains.
-
-Diagonal photo blur can still extend into the picture and follows the editable curve. Its distance now uses the same projected coordinate, so perspective does not stretch the feather. This separates the soft photograph from the aligned shadow boundary, with no extra sampling. The tradeoff is a lighter thin wedge near flat: there is less space outside the picture for the shadow to reach full opacity. Both flat endpoints and top/bottom symmetry are preserved. Right-screen darkness tuning is unchanged.
+After browser decoding applies image orientation, portrait and square inputs are cropped around their center to 3:2, matching the sample collection. The full source width is retained; crop height is width / 1.5 and the vertical origin is (source height − crop height) / 2. The crop is then downsampled to at most 2048 pixels on its longest edge. Landscape sources keep their existing aspect ratio. This preprocessing happens once per image, so the shader sees the same landscape texture shape it already supports, without per-frame crop work. The tradeoff is loss of the top and bottom of portrait compositions; there is no stretching or automatic subject detection. Uploaded originals remain local and unchanged.
