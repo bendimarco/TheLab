@@ -396,18 +396,19 @@ bool isGlassFace(LeafHit hit, float w, float h, float thickness) {
 vec3 rimColor(LeafHit hit, float thickness, float c, float s) {
     vec3 normal = vec3(c * hit.normal.x - s * hit.normal.z, hit.normal.y,
                           s * hit.normal.x + c * hit.normal.z);
-    vec3 lightDirection = normalize(vec3(-0.4, -0.6, 1.0));
-    float light = max(0.0, dot(normal, lightDirection));
-    vec3 halfVector = normalize(lightDirection + vec3(0.0, 0.0, 1.0));
-    float reflectedLight = max(0.0, dot(normal, halfVector));
-    float broadReflection = pow(reflectedLight, 18.0);
-    float highlight = pow(reflectedLight, 110.0);
-    float grazing = pow(1.0 - abs(normal.z), 3.0);
-    // Polished silver: a broad reflection under a brighter, narrower highlight.
-    // Keep the ambient floor bright so shadowed corners never turn black.
-    float metal = min(1.0, 0.57 + 0.16 * light + 0.12 * broadReflection +
-                           0.42 * highlight + 0.10 * grazing);
-    return vec3(metal * 0.98, metal * 0.995, metal);
+    // Reflect broad studio light strips instead of diffuse plastic-like shading.
+    // Soft strip edges avoid razor-thin glints as the rim rotates.
+    vec3 reflection = reflect(vec3(0.0, 0.0, -1.0), normal);
+    float aa = 0.04;
+    float keyStrip = 1.0 - smoothstep(0.055, 0.055 + aa,
+                                     abs(reflection.x + 0.34));
+    float fillStrip = 1.0 - smoothstep(0.18, 0.18 + aa,
+                                      abs(reflection.x - 0.55));
+    float facing = 0.5 + 0.5 * reflection.y;
+    float grazing = pow(1.0 - abs(normal.z), 4.0);
+    float metal = clamp(0.40 + 0.18 * facing + 0.48 * keyStrip +
+                       0.22 * fillStrip + 0.16 * grazing, 0.40, 1.0);
+    return vec3(metal * 0.97, metal * 0.99, metal);
 
 }
 
