@@ -192,6 +192,14 @@ export default function Home() {
   const [duration, setDuration] = useState(1.9);
   const [error, setError] = useState('');
   const [videoNeedsPlay, setVideoNeedsPlay] = useState(false);
+  const [videoActive, setVideoActive] = useState(false);
+  const [videoPaused, setVideoPaused] = useState(false);
+  const [videoState, setVideoState] = useState({
+    time: 0,
+    duration: 0,
+    paused: true,
+    rate: 1,
+  });
   const [renderError, setRenderError] = useState('');
   const [status, setStatus] = useState('');
   const temporaryPhotos = useRef(new Set<string>());
@@ -334,6 +342,11 @@ export default function Home() {
   const activateMedia = useCallback((media: DecodedMedia) => {
     currentMedia.current?.dispose();
     setVideoNeedsPlay(false);
+    setVideoActive(media.kind === 'video');
+    setVideoPaused(false);
+    setVideoState(
+      media.playback?.() ?? { time: 0, duration: 0, paused: true, rate: 1 },
+    );
     currentMedia.current = media;
     pendingMedia.current = null;
     currentImage.current = media.canvas;
@@ -353,9 +366,19 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    mediaPaused.current = galleryOpen || !!renderError;
+    mediaPaused.current = galleryOpen || !!renderError || videoPaused;
     currentMedia.current?.setPaused(mediaPaused.current);
-  }, [galleryOpen, renderError]);
+  }, [galleryOpen, renderError, videoPaused]);
+
+  useEffect(() => {
+    if (!videoActive) return;
+    const timer = window.setInterval(() => {
+      if (document.hidden) return;
+      const state = currentMedia.current?.playback?.();
+      if (state) setVideoState(state);
+    }, 200);
+    return () => clearInterval(timer);
+  }, [videoActive]);
 
   const cancelFade = useCallback(() => {
     ++mediaJob.current;
@@ -451,6 +474,32 @@ export default function Home() {
             setError(
               'Your saved media could not be loaded. Browser storage may be unavailable.',
             );
+        }
+        if (!alive.current || mediaJob.current !== job) return;
+        // Repair legacy blank video previews once, retaining media and record identity.
+        for (let i = 0; i < photos.length; i++) {
+          const photo = photos[i];
+          if (
+            photo.previewVersion === 1 ||
+            !isVideo({ type: photo.blob.type, name: photo.name })
+          )
+            continue;
+          let preview: DecodedMedia | undefined;
+          try {
+            preview = await decodeMedia(photoFile(photo));
+            if (!alive.current || mediaJob.current !== job) return;
+            const repaired = await preparePhoto(
+              preview.canvas,
+              photo.name,
+              photoFile(photo),
+            );
+            photos[i] = { ...repaired, id: photo.id, addedAt: photo.addedAt };
+            await savePhotos([photos[i]]).catch(() => {});
+          } catch {
+            /* Keep the original item if this browser cannot decode it. */
+          } finally {
+            preview?.dispose();
+          }
         }
         if (!alive.current || mediaJob.current !== job) return;
         imageFiles.current = photos.map(photoFile);
@@ -972,10 +1021,11 @@ export default function Home() {
               return;
             if (
               (e.target as Element).closest(
-                'button, input, a, .demo-photo-tools, .personal-gallery',
+                'button, input, a, .demo-photo-tools, .personal-gallery, .video-controls',
               )
             )
               return;
+            if (videoNeedsPlay) currentMedia.current?.resume();
             foldHint.current?.pause();
             renderer.current.stop();
             pointer.current = {
@@ -1140,16 +1190,71 @@ export default function Home() {
               ))}
             </div>
           </section>
-          <div ref={photoTools} className="demo-photo-tools">
-            {videoNeedsPlay && !galleryOpen && (
+          {videoActive && !galleryOpen && (
+            <div
+              className="video-controls"
+              aria-label="Video controls"
+              style={{
+                left: Math.max(
+                  12,
+                  (canvas.current?.clientWidth ?? 0) / 2 -
+                    demoHeight(
+                      canvas.current?.clientWidth ?? 1,
+                      canvas.current?.clientHeight ?? 1,
+                      progress,
+                      false,
+                    ) *
+                      (0.36 + 0.36 * ease(progress)) -
+                    96,
+                ),
+                top: (canvas.current?.clientHeight ?? 0) / 2,
+              }}
+            >
               <button
-                className="glass video-play"
                 disabled={busy}
-                onClick={() => currentMedia.current?.resume()}
+                onClick={() => {
+                  const media = currentMedia.current;
+                  if (!media) return;
+                  const shouldPlay =
+                    videoNeedsPlay || videoPaused || media.playback?.().paused;
+                  setVideoPaused(!shouldPlay);
+                  media.setPaused(!shouldPlay);
+                  if (shouldPlay) media.resume();
+                  const state = media.playback?.();
+                  if (state) setVideoState(state);
+                }}
               >
-                <Play size={17} fill="currentColor" /> Play video
+                {videoNeedsPlay || videoPaused || videoState.paused
+                  ? 'Play'
+                  : 'Pause'}
               </button>
-            )}
+              <button
+                aria-label="Toggle video speed"
+                onClick={() => {
+                  const rate = videoState.rate === 1 ? 0.5 : 1;
+                  currentMedia.current?.setRate?.(rate);
+                  setVideoState((state) => ({ ...state, rate }));
+                }}
+              >
+                {videoState.rate}×
+              </button>
+              <input
+                type="range"
+                aria-label="Scrub video"
+                min="0"
+                max={videoState.duration || 1}
+                step="0.01"
+                value={videoState.time}
+                disabled={!videoState.duration || busy}
+                onChange={(e) => {
+                  const time = Number(e.target.value);
+                  currentMedia.current?.seek?.(time);
+                  setVideoState((state) => ({ ...state, time }));
+                }}
+              />
+            </div>
+          )}
+          <div ref={photoTools} className="demo-photo-tools">
             <button
               className="glass shuffle"
               aria-label="Shuffle media"

@@ -87,3 +87,5 @@ If local saving fails, new media remains usable for the current visit with an ex
 On phones, the folded demo starts larger and smoothly scales to fit its full open width. Horizontal drags can start anywhere on the free demo stage; pointer capture retains the gesture outside the phone, and horizontal intent stays locked despite vertical finger drift. The controls and gallery retain their own interactions.
 
 The drag instruction text and arrow are hidden on phones; the fold teaser remains. Blocked video playback shows the decoded poster while the Play video button waits for a user gesture.
+
+Video transport is desktop-only: quiet Play/Pause and 1×/0.5× text to the left of the phone, plus a small scrubber. Seeking refreshes the shader even while paused. Mobile attempts muted playback and retries blocked playback on the next demo gesture without extra transport controls. Older uploaded-video previews are regenerated once from their local originals and stored as JPEG previews; media bytes remain unchanged.

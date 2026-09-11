@@ -5,6 +5,7 @@ export type LocalPhoto = {
   blob: Blob;
   thumbnail: string;
   poster?: string;
+  previewVersion?: number;
   addedAt: number;
 };
 type StoredPhoto = Omit<LocalPhoto, 'blob'> & {
@@ -113,8 +114,10 @@ export async function preparePhoto(
     id: crypto.randomUUID(),
     name,
     blob: originalVideo ?? blob,
-    ...(originalVideo ? { poster: canvas.toDataURL('image/webp', 0.85) } : {}),
-    thumbnail: thumbnail.toDataURL('image/webp', 0.8),
+    ...(originalVideo
+      ? { poster: canvas.toDataURL('image/jpeg', 0.9), previewVersion: 1 }
+      : {}),
+    thumbnail: thumbnail.toDataURL('image/jpeg', 0.85),
     addedAt: Date.now(),
   };
 }

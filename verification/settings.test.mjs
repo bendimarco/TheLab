@@ -1091,7 +1091,9 @@ test('blocked playback resumes directly from a gesture and stale interruptions a
     readyState = 2;
     duration = 4;
     time = 0;
-    get currentTime() { return this.time; }
+    get currentTime() {
+      return this.time;
+    }
     set currentTime(value) {
       this.time = value;
       queueMicrotask(() => this.dispatchEvent(new Event('seeked')));
@@ -1150,8 +1152,29 @@ test('blocked playback resumes directly from a gesture and stale interruptions a
     );
     await flush();
     assert.deepEqual(needed, [true]);
-    assert.equal(video.currentTime, 0, 'preview seek resets to the beginning');
-    assert.equal(media.textureSource, media.canvas, 'blocked playback retains a poster');
+    assert.equal(
+      video.currentTime,
+      0.1,
+      'preview remains decoded without a racing reset',
+    );
+    media.setRate(0.5);
+    assert.equal(video.playbackRate, 0.5);
+    media.setPaused(true);
+    media.seek(2);
+    await flush();
+    assert.equal(video.currentTime, 2);
+    assert.equal(
+      media.textureSource,
+      media.canvas,
+      'paused seek renders a still frame',
+    );
+    media.setPaused(false);
+    await flush();
+    assert.equal(
+      media.textureSource,
+      media.canvas,
+      'blocked playback retains a poster',
+    );
     assert.equal(errors.length, 0);
     video.mode = 'ok';
     const before = calls;

@@ -73,6 +73,14 @@ export type DecodedMedia = {
     onError: (error: Error) => void,
     onNeedsPlay?: (needed: boolean) => void,
   ) => void;
+  playback?: () => {
+    time: number;
+    duration: number;
+    paused: boolean;
+    rate: number;
+  };
+  setRate?: (rate: number) => void;
+  seek?: (time: number) => void;
   resume: () => void;
   setPaused: (paused: boolean) => void;
   dispose: () => void;
@@ -150,6 +158,8 @@ export async function decodeMedia(
   video.loop = true;
   video.playsInline = true;
   video.preload = 'auto';
+  video.setAttribute?.('muted', '');
+  video.setAttribute?.('playsinline', '');
   const blob =
     typeof source === 'string' ? await fetchSampleVideo(source) : source;
   const url = URL.createObjectURL(blob);
@@ -229,6 +239,7 @@ export async function decodeMedia(
     cancelFrame();
     document.removeEventListener('visibilitychange', syncPlayback);
     video.removeEventListener('error', runtimeError);
+    video.removeEventListener('seeked', refreshSeek);
     video.pause();
     video.removeAttribute('src');
     video.load();
@@ -237,6 +248,13 @@ export async function decodeMedia(
   let draw = () => {};
   let directVideoTexture = false;
   let hasPresentedFrame = false;
+  const refreshSeek = () => {
+    if (disposed || failed || video.readyState < 2) return;
+    draw();
+    hasPresentedFrame = false;
+    lastTime = -1;
+    onFrame();
+  };
   const tick = (now: number, metadata?: VideoFrameCallbackMetadata) => {
     frame = 0;
     if (disposed || failed || paused || document.hidden) return;
@@ -337,7 +355,8 @@ export async function decodeMedia(
         canvas.height,
       );
     draw();
-    if (video.currentTime > 0) video.currentTime = 0;
+    // Keep the decoded poster position: an asynchronous reset can race play().
+    video.addEventListener('seeked', refreshSeek);
     // Uncropped, bounded videos (including our sample) can go straight to WebGL.
     // Larger/portrait uploads retain the bounded canvas path to preserve their crop.
     directVideoTexture =
@@ -364,6 +383,19 @@ export async function decodeMedia(
           return;
         }
         syncPlayback();
+      },
+      playback: () => ({
+        time: video.currentTime,
+        duration: Number.isFinite(video.duration) ? video.duration : 0,
+        paused: video.paused,
+        rate: video.playbackRate || 1,
+      }),
+      setRate(rate) {
+        video.playbackRate = rate === 0.5 ? 0.5 : 1;
+      },
+      seek(time) {
+        if (Number.isFinite(time) && Number.isFinite(video.duration))
+          video.currentTime = Math.max(0, Math.min(video.duration, time));
       },
       resume() {
         syncPlayback();
