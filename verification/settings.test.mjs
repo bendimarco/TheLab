@@ -65,7 +65,7 @@ await writeFile(
     },
   }).outputText,
 );
-const { createFoldHint, FOLD_HINT_KEY } = await import(
+const { createFoldHint } = await import(
   pathToFileURL(join(dir, 'fold-hint.mjs'))
 );
 const { defaults, validSettings, ease, blurCurve, blurCurveTable } =
@@ -555,7 +555,7 @@ test('toolbar measurements defer layout writes, coalesce changes, and cancel on 
   }
 });
 
-test('fold guidance waits for idle, repeats every four seconds, and never returns after completion', () => {
+test('fold guidance waits for idle, stops after interaction, and restarts on a fresh visit', () => {
   const original = {
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
@@ -569,7 +569,7 @@ test('fold guidance waits for idle, repeats every four seconds, and never return
     cancelled = 0,
     writes = 0;
   const timers = new Map(),
-    storage = new Map(),
+    storage = new Map([['lab.fold-hint.completed', '1']]),
     visibility = [];
   const schedule = (fn, delay, repeat) => {
     timers.set(++id, { fn, at: clock + delay, repeat });
@@ -630,22 +630,25 @@ test('fold guidance waits for idle, repeats every four seconds, and never return
     assert.equal(visibility.at(-1), true);
     hint.complete();
     hint.complete();
-    assert.equal(
-      writes,
-      1,
-      'drag moves write the completed preference only once',
-    );
-    assert.equal(storage.get(FOLD_HINT_KEY), '1');
+    assert.equal(writes, 0, 'completion stays in memory for this visit');
     hint.resume();
     advance(12000);
     assert.equal(nudges, 2);
     hint.destroy();
     const nextVisit = createFoldHint(options);
     nextVisit.resume();
+    advance(2999);
+    assert.equal(visibility.at(-1), false);
+    advance(1);
+    assert.equal(visibility.at(-1), true);
+    advance(1000);
+    assert.equal(nudges, 3);
+    nextVisit.complete();
+    nextVisit.resume();
     advance(12000);
-    assert.equal(nudges, 2);
-    assert.equal(timers.size, 0);
+    assert.equal(nudges, 3);
     nextVisit.destroy();
+    assert.equal(timers.size, 0);
   } finally {
     Object.assign(globalThis, original);
   }

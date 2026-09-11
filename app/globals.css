@@ -792,7 +792,8 @@ canvas:focus-visible {
   display: flex;
   align-items: center;
   gap: 7px;
-  width: 110px;
+  width: max-content;
+  white-space: nowrap;
   padding: 8px;
   border-radius: 12px;
   font-size: 12px;
@@ -816,7 +817,6 @@ canvas:focus-visible {
 @media (max-width: 500px) {
   .fold-hint {
     right: 8px;
-    width: 94px;
     font-size: 11px;
   }
 }

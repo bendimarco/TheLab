@@ -23,6 +23,8 @@ Open the local URL printed by the server. `npm run build` creates the production
 - Versions and animation duration stay in this browser's local storage. Clearing site data removes them. A local preview and the hosted site have separate storage.
 - Image decoding and rendering happen on your device. Visitor uploads are not sent to a server or added to this repository. The Italy sample collection is bundled publicly. Your personal rotation persists across refreshes in local IndexedDB.
 
+After three idle seconds, a single-line “Drag left to expand” hint eases in to the right of the demo, with a small opening nudge every four seconds. Interacting dismisses the guidance for that visit; refreshing the page makes it available again. Reduced-motion preferences suppress the nudge.
+
 The controls start hidden. Use the sliders icon to open the floating right-side inspector, and its close button, the same icon, or Escape to dismiss it. The panel has a 12 px inset and rounded corners; the demo moves into the remaining space while it slides in. The inspector is nonmodal so the demo remains interactive. Browser CSS approximates the native translucent controls; it does not use Apple's Liquid Glass APIs.
 
 Blur end shift is fixed at 24% in both renderers; saved versions cannot override it.

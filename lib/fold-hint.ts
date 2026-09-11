@@ -1,16 +1,9 @@
-export const FOLD_HINT_KEY = 'lab.fold-hint.completed';
-
-// One-time guidance. Timer ownership stays separate from the user's fold animation.
+// Per-visit guidance. Timer ownership stays separate from the user's fold animation.
 export function createFoldHint(options: {
   show: (visible: boolean) => void;
   nudge: () => () => void;
 }) {
   let learned = false;
-  try {
-    learned = localStorage.getItem(FOLD_HINT_KEY) === '1';
-  } catch {
-    /* Session-only when storage is unavailable. */
-  }
   let active = false;
   let destroyed = false;
   let visible = false;
@@ -48,11 +41,6 @@ export function createFoldHint(options: {
       if (learned) return;
       learned = true;
       pause();
-      try {
-        localStorage.setItem(FOLD_HINT_KEY, '1');
-      } catch {
-        /* Still dismissed for this session. */
-      }
     },
     destroy() {
       destroyed = true;
