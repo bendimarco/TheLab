@@ -1,6 +1,12 @@
 'use client';
 /* eslint-disable jsx-a11y/prefer-tag-over-role -- The custom GPU canvas has keyboard slider semantics. */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   Plus,
   History,
@@ -145,6 +151,70 @@ export default function Home() {
   const [busy, setBusy] = useState(true);
   const [personalPhotos, setPersonalPhotos] = useState<LocalPhoto[]>([]);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const galleryGrid = useRef<HTMLDivElement>(null);
+  const previousPhotoRects = useRef<Map<string, DOMRect> | null>(null);
+  const capturePhotoPositions = () => {
+    previousPhotoRects.current = new Map(
+      Array.from(
+        galleryGrid.current?.querySelectorAll<HTMLElement>('[data-photo-id]') ??
+          [],
+      ).map((element) => [
+        element.dataset.photoId!,
+        element.getBoundingClientRect(),
+      ]),
+    );
+  };
+  useLayoutEffect(() => {
+    const previous = previousPhotoRects.current;
+    previousPhotoRects.current = null;
+    if (
+      !previous ||
+      !galleryOpen ||
+      matchMedia('(prefers-reduced-motion: reduce)').matches
+    )
+      return;
+    const elements = Array.from(
+      galleryGrid.current?.querySelectorAll<HTMLElement>('[data-photo-id]') ??
+        [],
+    );
+    // Cancel old layout motion before measuring the new layout. The captured
+    // rectangles contain the currently visible positions, so interrupted moves stay continuous.
+    for (const element of elements)
+      for (const animation of element.getAnimations()) animation.cancel();
+    const next = elements.map((element) => ({
+      element,
+      rect: element.getBoundingClientRect(),
+    }));
+    for (const { element, rect } of next) {
+      const old = previous.get(element.dataset.photoId!);
+      if (old) {
+        const dx = old.left - rect.left,
+          dy = old.top - rect.top;
+        if (
+          Math.abs(dx) + Math.abs(dy) > 0.5 ||
+          Math.abs(old.width - rect.width) > 0.5
+        ) {
+          element.animate(
+            [
+              {
+                transform: `translate(${dx}px, ${dy}px) scale(${old.width / rect.width}, ${old.height / rect.height})`,
+              },
+              { transform: 'none' },
+            ],
+            { duration: 380, easing: 'cubic-bezier(.22, 1, .36, 1)' },
+          );
+        }
+      } else {
+        element.querySelector('.gallery-card')?.animate(
+          [
+            { opacity: 0, transform: 'translateY(22px) scale(.9)' },
+            { opacity: 1, transform: 'translateY(0) scale(1)' },
+          ],
+          { duration: 320, easing: 'cubic-bezier(.22, 1, .36, 1)' },
+        );
+      }
+    }
+  }, [personalPhotos, galleryOpen]);
   const galleryClose = useRef<HTMLButtonElement>(null);
   const galleryTrigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -157,8 +227,19 @@ export default function Home() {
           galleryTrigger.current?.focus({ preventScroll: true });
         }
       };
+      const dismissOutside = (event: MouseEvent) => {
+        if (!(event.target instanceof Element)) return;
+        // Photo actions stay inside the gallery. Its trigger handles its own toggle.
+        if (event.target.closest('[data-photo-id], .personal-rotation')) return;
+        setGalleryOpen(false);
+        galleryTrigger.current?.focus({ preventScroll: true });
+      };
       window.addEventListener('keydown', escape);
-      return () => window.removeEventListener('keydown', escape);
+      window.addEventListener('click', dismissOutside);
+      return () => {
+        window.removeEventListener('keydown', escape);
+        window.removeEventListener('click', dismissOutside);
+      };
     }
   }, [galleryOpen]);
   const closeGallery = () => {
@@ -499,6 +580,7 @@ export default function Home() {
       if (!alive.current) return;
       imageFiles.current = photos.map(photoFile);
       setFileCount(photos.length);
+      capturePhotoPositions();
       setPersonalPhotos(photos);
       setSelectedSample(null);
       const index = photos.findIndex((photo) => photo.id === prepared[0].id);
@@ -528,7 +610,32 @@ export default function Home() {
       await deletePhoto(id);
       const photos = await readPhotos();
       if (!alive.current) return;
+      const slot = Array.from(
+        galleryGrid.current?.querySelectorAll<HTMLElement>('[data-photo-id]') ??
+          [],
+      ).find((element) => element.dataset.photoId === id);
+      const card = slot?.querySelector<HTMLElement>('.gallery-card');
+      if (card && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        await card
+          .animate(
+            [
+              {
+                opacity: getComputedStyle(card).opacity,
+                transform: getComputedStyle(card).transform,
+              },
+              { opacity: 0, transform: 'translateY(10px) scale(.86)' },
+            ],
+            {
+              duration: 200,
+              easing: 'cubic-bezier(.4, 0, 1, 1)',
+              fill: 'forwards',
+            },
+          )
+          .finished.catch(() => {});
+      }
+      if (!alive.current) return;
       imageFiles.current = photos.map(photoFile);
+      capturePhotoPositions();
       setPersonalPhotos(photos);
       setFileCount(photos.length);
       if (!photos.length) {
@@ -727,35 +834,42 @@ export default function Home() {
                 Your photos <span>{fileCount}</span>
               </h2>
             </div>
-            <div className="gallery-grid">
+            <div ref={galleryGrid} className="gallery-grid">
               {personalPhotos.map((photo, index) => (
                 <div
-                  className="gallery-card"
+                  className="gallery-slot"
                   key={photo.id}
-                  style={
-                    {
-                      '--card-delay': `${Math.min(index, 6) * 45}ms`,
-                      '--card-tilt': `${((index % 3) - 1) * 3}deg`,
-                    } as React.CSSProperties
-                  }
+                  data-photo-id={photo.id}
                 >
-                  <button
-                    className="gallery-pick"
-                    disabled={busy}
-                    aria-label={`Use ${photo.name}`}
-                    onClick={() => void choosePersonalPhoto(index)}
+                  <div
+                    className="gallery-card"
+                    style={
+                      {
+                        '--card-delay': `${Math.min(index, 6) * 45}ms`,
+                        '--hover-tilt': `${index % 2 ? 2 : -2}deg`,
+                      } as React.CSSProperties
+                    }
                   >
-                    <GalleryPhoto photo={photo} open={galleryOpen} />
-                  </button>
-                  <button
-                    className="gallery-remove"
-                    disabled={busy}
-                    aria-label={`Remove ${photo.name}`}
-                    title="Remove photo"
-                    onClick={() => void removePhoto(photo.id)}
-                  >
-                    <X size={13} />
-                  </button>
+                    <div className="gallery-surface">
+                      <button
+                        className="gallery-pick"
+                        disabled={busy}
+                        aria-label={`Use ${photo.name}`}
+                        onClick={() => void choosePersonalPhoto(index)}
+                      >
+                        <GalleryPhoto photo={photo} open={galleryOpen} />
+                      </button>
+                      <button
+                        className="glass gallery-remove"
+                        disabled={busy}
+                        aria-label={`Remove ${photo.name}`}
+                        title="Remove photo"
+                        onClick={() => void removePhoto(photo.id)}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

@@ -619,31 +619,45 @@ canvas:focus-visible {
   min-height: 0;
   flex: 1;
 }
-.gallery-card {
+.gallery-slot {
   position: relative;
   aspect-ratio: 3 / 2;
+  transform-origin: top left;
+}
+.gallery-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
   opacity: 0;
-  transform: translateY(90px) scale(0.65) rotate(10deg);
+  transform: translateY(22px) scale(0.92);
   transition:
     opacity 200ms ease,
     transform 300ms ease;
 }
 .gallery-open .gallery-card {
   opacity: 1;
-  transform: translateY(0) scale(1) rotate(var(--card-tilt));
+  transform: translateY(0) scale(1);
   transition:
     opacity 280ms ease var(--card-delay),
-    transform 550ms cubic-bezier(0.18, 1.25, 0.35, 1) var(--card-delay);
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1) var(--card-delay);
 }
-.gallery-open .gallery-card:hover,
-.gallery-open .gallery-card:focus-within {
-  transform: translateY(-4px) scale(1.02) rotate(0);
+.gallery-surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform: scale(1) rotate(0);
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .gallery-open .gallery-slot:hover .gallery-surface {
+    transform: translateY(-3px) scale(1.035) rotate(var(--hover-tilt));
+  }
 }
 .gallery-pick {
   display: block;
   width: 100%;
   height: 100%;
-  padding: 5px;
+  padding: 2px;
   border: 0;
   border-radius: 14px;
   background: white;
@@ -657,25 +671,33 @@ canvas:focus-visible {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: 12px;
 }
-.gallery-remove {
+.gallery-pick:disabled {
+  opacity: 1;
+}
+.gallery-remove.glass {
   position: absolute;
   right: -8px;
   top: -8px;
   display: grid;
   place-items: center;
-  width: 25px;
-  height: 25px;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
   padding: 0;
-  border: 2px solid white;
+  border: 0.75px solid #ffffffb3;
   border-radius: 50%;
-  background: #292b32;
-  color: white;
-  box-shadow: 0 2px 6px #0003;
+  background: linear-gradient(160deg, #fffe, #ededf2dc);
+  color: #55565e;
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 2px 7px #20212620,
+    inset 0 1px 0 #ffffff70;
 }
-.gallery-remove:hover {
-  background: #d33945;
+.gallery-remove.glass:hover {
+  background: #fff;
+  color: #c83136;
 }
 .photo-notice {
   z-index: 4;
@@ -727,4 +749,12 @@ canvas:focus-visible {
     right var(--panel-motion),
     opacity 200ms ease,
     visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-surface,
+  .gallery-open .gallery-slot:hover .gallery-surface {
+    transform: none;
+    transition: none;
+  }
 }
