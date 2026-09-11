@@ -84,9 +84,13 @@ const { releaseTarget, settledProgress } = await import(
 const { decodeMedia, isVideo, videoCrop } = await import(
   pathToFileURL(join(dir, 'media.mjs'))
 );
-const { samplePhotos, defaultPhoto } = await import(
-  pathToFileURL(join(dir, 'samples.mjs'))
-);
+const {
+  samplePhotos,
+  defaultPhoto,
+  defaultSampleIndex,
+  shuffleSampleIndices,
+  shouldPreferStillSamples,
+} = await import(pathToFileURL(join(dir, 'samples.mjs')));
 
 await rm(dir, { recursive: true, force: true });
 test('saved settings round-trip independently; deleting does not reuse version numbers', () => {
@@ -647,11 +651,12 @@ test('fold guidance waits for idle, repeats every four seconds, and never return
   }
 });
 
-test('sample collection starts with dog, then lake, friend and sunset', () => {
-  assert.equal(defaultPhoto.id, 'p1001338');
+test('sample collection starts with video, then dog, lake and friend', () => {
+  assert.equal(defaultPhoto.id, 'p1001308');
+  assert.equal(defaultPhoto.kind, 'video');
   assert.deepEqual(
     samplePhotos.map((p) => p.label),
-    ['Dog', 'Lake', 'Friend', 'Sunset'],
+    ['Italy video', 'Dog', 'Lake', 'Friend'],
   );
 });
 
@@ -798,6 +803,15 @@ test('video resource updates only new frames and pauses/releases its decoder and
     assert.equal(callbacks.size, 0);
     assert.equal(revoked, 1);
     assert.equal(video.src, '');
+    const remote = await decodeMedia('/photos/italy/p1001308.mp4?version=1');
+    assert.equal(video.src, '/photos/italy/p1001308.mp4?version=1');
+    assert.equal(remote.kind, 'video');
+    remote.dispose();
+    assert.equal(
+      revoked,
+      1,
+      'public video URLs are never treated as owned object URLs',
+    );
     doc.dispatchEvent(new Event('visibilitychange'));
     assert.equal(callbacks.size, 0);
   } finally {
@@ -889,4 +903,32 @@ test('unsupported video decoding cleans up its source and oversized videos alloc
     URL.createObjectURL = original.create;
     URL.revokeObjectURL = original.revoke;
   }
+});
+
+test('phones and motion/data preferences avoid automatic video loads and shuffle picks', () => {
+  const desktop = {
+    userAgent: 'Macintosh',
+    coarsePointer: false,
+    shortEdge: 900,
+    reducedMotion: false,
+    saveData: false,
+  };
+  assert.equal(shouldPreferStillSamples(desktop), false);
+  for (const change of [
+    { userAgent: 'iPhone' },
+    { userAgent: 'Linux; Android 14; Mobile' },
+    { coarsePointer: true, shortEdge: 390 },
+    { reducedMotion: true },
+    { saveData: true },
+  ])
+    assert.equal(shouldPreferStillSamples({ ...desktop, ...change }), true);
+  assert.equal(defaultSampleIndex(false), 0);
+  assert.equal(samplePhotos[defaultSampleIndex(true)].id, 'p1001338');
+  assert.deepEqual(shuffleSampleIndices(false), [0, 1, 2, 3]);
+  assert.deepEqual(shuffleSampleIndices(true), [1, 2, 3]);
+  assert.ok(
+    shuffleSampleIndices(true).every(
+      (index) => samplePhotos[index].kind === 'image',
+    ),
+  );
 });

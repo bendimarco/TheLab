@@ -40,7 +40,9 @@ import {
   type Settings,
 } from '@/projects/001-duo-expansion/settings';
 import {
-  defaultPhoto,
+  defaultSampleIndex,
+  shuffleSampleIndices,
+  shouldPreferStillSamples,
   samplePhotos,
 } from '@/projects/001-duo-expansion/samples';
 import {
@@ -158,6 +160,7 @@ export default function Home() {
   const [hintVisible, setHintVisible] = useState(false);
   const currentImage = useRef<HTMLCanvasElement | null>(null);
   const currentMedia = useRef<DecodedMedia | null>(null);
+  const preferStillSamples = useRef(false);
   const pendingMedia = useRef<DecodedMedia | null>(null);
   const finishFade = useRef<((success: boolean) => void) | null>(null);
   const mediaPaused = useRef(false);
@@ -353,6 +356,15 @@ export default function Home() {
 
   useEffect(() => {
     alive.current = true;
+    preferStillSamples.current = shouldPreferStillSamples({
+      userAgent: navigator.userAgent,
+      coarsePointer: matchMedia('(pointer: coarse)').matches,
+      shortEdge: Math.min(screen.width, screen.height),
+      reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+      saveData: !!(
+        navigator as Navigator & { connection?: { saveData?: boolean } }
+      ).connection?.saveData,
+    });
     // Browser-local versions must hydrate after SSR; this is a one-time external-storage read.
     try {
       // eslint-disable-next-line react/react-compiler
@@ -423,10 +435,24 @@ export default function Home() {
         setPersonalPhotos(photos);
         const index = photos.length - 1;
         imageIndex.current = index;
-        setSelectedSample(index >= 0 ? null : 0);
-        const media = await decodeMedia(
-          index >= 0 ? imageFiles.current[index] : defaultPhoto.src,
+        setSelectedSample(
+          index >= 0 ? null : defaultSampleIndex(preferStillSamples.current),
         );
+        let media: DecodedMedia;
+        try {
+          media = await decodeMedia(
+            index >= 0
+              ? imageFiles.current[index]
+              : samplePhotos[defaultSampleIndex(preferStillSamples.current)]
+                  .src,
+          );
+        } catch (error) {
+          if (index >= 0) throw error;
+          // A failed or unsupported sample video must not leave a blank first visit.
+          media = await decodeMedia(samplePhotos[defaultSampleIndex(true)].src);
+          if (alive.current && mediaJob.current === job)
+            setSelectedSample(defaultSampleIndex(true));
+        }
         if (!alive.current || mediaJob.current !== job) {
           media.dispose();
           return;
@@ -633,7 +659,11 @@ export default function Home() {
       );
     }
   }
-  async function changeImage(source: File | string = defaultPhoto.src) {
+  async function changeImage(
+    source: File | string = samplePhotos[
+      defaultSampleIndex(preferStillSamples.current)
+    ].src,
+  ) {
     cancelFade();
     const job = mediaJob.current;
     setBusy(true);
@@ -794,9 +824,11 @@ export default function Home() {
       setFileCount(photos.length);
       if (!photos.length) {
         imageIndex.current = -1;
-        setSelectedSample(0);
+        setSelectedSample(defaultSampleIndex(preferStillSamples.current));
         setGalleryOpen(false);
-        await changeImage(defaultPhoto.src);
+        await changeImage(
+          samplePhotos[defaultSampleIndex(preferStillSamples.current)].src,
+        );
       } else if (selectedSample === null && activeId === id) {
         imageIndex.current = 0;
         await changeImage(imageFiles.current[0]);
@@ -832,14 +864,14 @@ export default function Home() {
   async function shuffle() {
     if (busy) return;
     if (imageFiles.current.length === 0) {
-      if (samplePhotos.length < 2) return;
-      const next =
-        ((selectedSample ?? 0) +
-          1 +
-          // eslint-disable-next-line react/react-compiler -- Random choice runs only in the shuffle click handler.
-          Math.floor(Math.random() * (samplePhotos.length - 1))) %
-        samplePhotos.length;
-      await chooseSample(next);
+      const candidates = shuffleSampleIndices(
+        preferStillSamples.current,
+      ).filter((index) => index !== selectedSample);
+      if (!candidates.length) return;
+      // eslint-disable-next-line react/react-compiler -- Random choice runs only in the shuffle click handler.
+      await chooseSample(
+        candidates[Math.floor(Math.random() * candidates.length)],
+      );
       return;
     }
     const files = imageFiles.current;
@@ -1449,9 +1481,13 @@ export default function Home() {
               <button
                 className="text-button"
                 disabled={busy}
-                onClick={() => void chooseSample(0)}
+                onClick={() =>
+                  void chooseSample(
+                    defaultSampleIndex(preferStillSamples.current),
+                  )
+                }
               >
-                Use sample photo
+                Use default sample
               </button>
             </div>
             <section
@@ -1467,7 +1503,9 @@ export default function Home() {
                     disabled={busy}
                     aria-label={`Try ${photo.label}`}
                     aria-pressed={selectedSample === index}
-                    title={photo.label}
+                    title={
+                      photo.kind === 'video' ? 'Play sample video' : photo.label
+                    }
                     onClick={() => void chooseSample(index)}
                   >
                     {/* These are pre-sized static thumbnails; no image server is needed. */}
@@ -1479,6 +1517,12 @@ export default function Home() {
                       height={240}
                       loading="lazy"
                     />
+                    {photo.kind === 'video' && (
+                      <span className="sample-video-badge">
+                        <Play size={15} fill="currentColor" />
+                        <span className="sr-only">Video</span>
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

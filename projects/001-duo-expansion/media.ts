@@ -87,14 +87,18 @@ export function videoCrop(width: number, height: number) {
 export async function decodeMedia(
   source: File | string,
 ): Promise<DecodedMedia> {
-  if (typeof source === 'string' || !isVideo(source)) {
+  const videoSource =
+    typeof source === 'string'
+      ? isVideo({ type: '', name: source.split(/[?#]/)[0] })
+      : isVideo(source);
+  if (!videoSource) {
     const canvas =
       typeof source === 'string'
         ? await decodeURL(source)
         : await decodeImage(source);
     return { canvas, kind: 'image', start() {}, setPaused() {}, dispose() {} };
   }
-  if (source.size > 100 * 1024 * 1024)
+  if (typeof source !== 'string' && source.size > 100 * 1024 * 1024)
     throw new Error('Choose a video smaller than 100 MB.');
   const video = document.createElement('video');
   video.muted = true;
@@ -102,7 +106,8 @@ export async function decodeMedia(
   video.loop = true;
   video.playsInline = true;
   video.preload = 'auto';
-  const url = URL.createObjectURL(source);
+  const ownsURL = typeof source !== 'string';
+  const url = typeof source === 'string' ? source : URL.createObjectURL(source);
   let disposed = false;
   let paused = false;
   let started = false;
@@ -146,7 +151,7 @@ export async function decodeMedia(
     video.pause();
     video.removeAttribute('src');
     video.load();
-    URL.revokeObjectURL(url);
+    if (ownsURL) URL.revokeObjectURL(url);
   };
   let draw = () => {};
   const tick = (now: number) => {

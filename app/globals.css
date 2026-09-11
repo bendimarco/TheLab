@@ -841,3 +841,16 @@ canvas:focus-visible {
   font-size: 11px;
   pointer-events: none;
 }
+
+.sample-photo {
+  position: relative;
+}
+.sample-video-badge {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: white;
+  filter: drop-shadow(0 1px 4px #0008);
+  pointer-events: none;
+}
