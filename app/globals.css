@@ -657,7 +657,7 @@ canvas:focus-visible {
 }
 @media (hover: hover) and (pointer: fine) {
   .gallery-open .gallery-slot:hover .gallery-surface {
-    transform: translateY(-4px) scale(1.09);
+    transform: translateY(-4px) scale(1.045);
   }
 }
 .gallery-pick {
