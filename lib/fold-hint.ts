@@ -37,12 +37,12 @@ export function createFoldHint(options: {
           cancelNudge?.();
           cancelNudge = options.nudge();
         };
-        // The 1.4s entrance finishes, then leave a 0.5s reading pause.
+        // The 0.7s entrance finishes, then leave a 0.2s reading pause.
         firstPulseTimer = setTimeout(() => {
           if (!active || destroyed) return;
           pulse();
           nudgeTimer = setInterval(pulse, 4000);
-        }, 1900);
+        }, 900);
       }, 1000);
     },
     pause,

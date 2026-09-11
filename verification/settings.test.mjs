@@ -617,8 +617,8 @@ test('fold guidance waits for idle, stops after interaction, and restarts on a f
     advance(1);
     assert.deepEqual(visibility, [true]);
     assert.equal(nudges, 0);
-    advance(1899);
-    assert.equal(nudges, 0, 'wait for entrance plus half a second');
+    advance(899);
+    assert.equal(nudges, 0, 'wait for entrance plus 0.2 seconds');
     advance(1);
     assert.equal(nudges, 1);
     advance(3999);
@@ -647,7 +647,7 @@ test('fold guidance waits for idle, stops after interaction, and restarts on a f
     advance(1);
     assert.equal(visibility.at(-1), true);
     assert.equal(nudges, 2);
-    advance(1900);
+    advance(900);
     assert.equal(nudges, 3);
     nextVisit.complete();
     nextVisit.resume();
