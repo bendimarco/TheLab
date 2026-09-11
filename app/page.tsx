@@ -846,7 +846,6 @@ export default function Home() {
                     style={
                       {
                         '--card-delay': `${Math.min(index, 6) * 45}ms`,
-                        '--hover-tilt': `${index % 2 ? 2 : -2}deg`,
                       } as React.CSSProperties
                     }
                   >
@@ -905,7 +904,15 @@ export default function Home() {
                   galleryOpen ? closeGallery() : setGalleryOpen(true)
                 }
               >
-                <span className="photo-stack" aria-hidden="true">
+                <span
+                  className="photo-stack"
+                  aria-hidden="true"
+                  style={
+                    {
+                      '--stack-count': Math.min(personalPhotos.length, 3),
+                    } as React.CSSProperties
+                  }
+                >
                   {personalPhotos.slice(-3).map((photo, index) => (
                     // eslint-disable-next-line nextjs/no-img-element
                     <img
