@@ -1,5 +1,7 @@
 # Duo expansion — WebGL port
 
+This case study records the evolution of the effect. Earlier defaults and geometry values below are historical; current values are in `projects/001-duo-expansion/settings.ts` and the shader. For a condensed reusable handoff, read [START-HERE.md](START-HERE.md).
+
 Duo folds a narrow screen outward around its left edge to reveal a screen twice as wide. The assembly shifts horizontally as it opens so the closed and fully open poses are both centered. The turning panel is a solid with rounded silver edges, a black bezel, and a front camera cutout.
 
 The key illusion is that the frame rotates in perspective while the photograph behaves like a flat image seen through a rotating window. Progressive blur, diagonal dark wedges, and angle-dependent blur reconcile those two conflicting depth cues.

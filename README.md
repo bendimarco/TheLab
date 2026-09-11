@@ -2,6 +2,8 @@
 
 A browser home for interactive graphics projects, starting with **Duo**: a direct WebGL 2 port of the SwiftLab folding-screen shader.
 
+For future experiments, read [the compact Lab handoff](Notes/START-HERE.md) and use [the project case-study template](Notes/ProjectTemplate.md).
+
 ## Run locally
 
 Requires Node.js 22.13 or later.

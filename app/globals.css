@@ -484,17 +484,20 @@ canvas:focus-visible {
   border-color: var(--primary);
 }
 .alignment-switch [data-slot='switch-thumb'] {
+  position: absolute;
+  top: 2px;
+  left: 2px;
   width: 16px;
   height: 16px;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px #0003;
   translate: none;
-  transform: translateX(0);
-  transition: transform 180ms ease;
+  transform: none;
+  transition: left 180ms ease;
 }
 .alignment-switch[data-checked] [data-slot='switch-thumb'] {
-  transform: translateX(14px);
+  left: calc(100% - 18px);
 }
 
 .modify.glass {
