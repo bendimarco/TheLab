@@ -184,13 +184,13 @@ function videoTransportLayout(
     }
   const transportLeft = Math.max(12, stageWidth / 2 + closedHinge - 120);
   const transportGap = projectedLeft - (transportLeft + 46);
-  const transportOpacity = ease(clamp((transportGap - 60) / 14));
+  const transportOpacity = ease(clamp((transportGap - 30) / 44));
 
   return {
     left: transportLeft,
     top: stageHeight / 2,
     opacity: transportOpacity,
-    visibility: transportGap <= 60 ? 'hidden' : 'visible',
+    visibility: transportGap <= 30 ? 'hidden' : 'visible',
   };
 }
 
